@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info:
+  title: Catalog Fixture API
+  version: 1.4.2
+servers:
+  - url: https://api.example.test/v1
+security:
+  - bearerAuth: []
+paths:
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUser
+      tags: [users]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: X-Trace
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User found
+          headers:
+            X-RateLimit:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+            application/xml:
+              schema:
+                type: string
+        '404':
+          description: User missing
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    patch:
+      operationId: patchUser
+      tags: [users, writes]
+      requestBody:
+        $ref: '#/components/requestBodies/PatchUser'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid patch
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /users:
+    post:
+      operationId: createUser
+      tags: [users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          description: Email already exists
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+  requestBodies:
+    PatchUser:
+      required: true
+      content:
+        application/merge-patch+json:
+          schema:
+            $ref: '#/components/schemas/PatchUser'
+  schemas:
+    User:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+    NewUser:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+    PatchUser:
+      type: object
+      properties:
+        displayName:
+          type: string
+    Problem:
+      type: object
+      properties:
+        title:
+          type: string
+        detail:
+          type: string

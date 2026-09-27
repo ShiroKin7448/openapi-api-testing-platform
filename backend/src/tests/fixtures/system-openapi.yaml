@@ -1,0 +1,205 @@
+openapi: 3.1.0
+info:
+  title: Deterministic E2E Sample API
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /login:
+    post:
+      operationId: fixtureLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login succeeded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accessToken]
+                properties:
+                  accessToken: { type: string }
+  /users:
+    post:
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                displayName: { type: string }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getUser
+      responses:
+        '200':
+          description: User returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    patch:
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    delete:
+      operationId: deleteUser
+      responses:
+        '204': { description: User deleted }
+  /validation-error:
+    get:
+      operationId: validationError
+      responses:
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+  /unauthorized:
+    get:
+      operationId: unauthorized
+      responses:
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+  /server-error:
+    get:
+      operationId: serverError
+      responses:
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+  /schema-violation:
+    get:
+      operationId: schemaViolation
+      responses:
+        '200':
+          description: Deliberately invalid response schema
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string }
+  /malformed:
+    get:
+      operationId: malformedBody
+      responses:
+        '200':
+          description: Malformed JSON response
+          content:
+            application/json:
+              schema: { type: object }
+  /slow:
+    get:
+      operationId: slowResponse
+      parameters:
+        - name: ms
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Delayed response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delay: { type: integer }
+  /parallel-a:
+    get:
+      operationId: parallelA
+      responses:
+        '200':
+          description: Parallel request A
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+  /parallel-b:
+    get:
+      operationId: parallelB
+      responses:
+        '200':
+          description: Parallel request B
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+  /slow-timeout:
+    get:
+      operationId: slowTimeout
+      responses:
+        '200':
+          description: Deterministically slow response for timeout testing
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string }
+    Problem:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }

@@ -1,0 +1,30 @@
+node_modules/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Generated output and test artifacts
+backend/dist/
+backend/build/
+backend/build-verification/
+frontend/dist/
+coverage/
+*.log
+
+# Local editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Internal handoff and obsolete AI-generated reports
+/HANDOFF_STATUS.md
+/replace_ids.js
+/backend/API_INTEGRATION_AUDIT.md
+/backend/FINAL_QA_REPORT.md
+/backend/src/tests/SECURITY_AUDIT.md

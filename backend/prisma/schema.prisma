@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(uuid())
+  email        String            @unique
+  passwordHash String
+  name         String
+  emailVerified Boolean          @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  workspaces   WorkspaceMember[]
+  passwordResetOtps PasswordResetOtp[]
+}
+
+model PasswordResetOtp {
+  id        String    @id @default(uuid())
+  userId    String
+  purpose   EmailOtpPurpose @default(PASSWORD_RESET)
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  resetGrantHash String?
+  resetGrantExpiresAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, purpose])
+  @@index([expiresAt])
+}
+
+enum EmailOtpPurpose {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+}
+
+model Workspace {
+  id        String            @id @default(uuid())
+  name      String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  members   WorkspaceMember[]
+  projects  Project[]
+}
+
+model WorkspaceMember {
+  id           String              @id @default(uuid())
+  userId       String
+  workspaceId  String
+  role         WorkspaceRole
+  status       MemberStatus        @default(ACTIVE)
+  invitedEmail String?
+  invitedAt    DateTime?
+  joinedAt     DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  openapiSpecs OpenAPISpec[]
+  environments Environment[]
+  testRuns     TestRun[]
+  testSchedules TestSchedule[]
+}
+
+model OpenAPISpec {
+  id        String     @id @default(uuid())
+  projectId String
+  version   String
+  content   Json       // Storing as JSON object for easy querying
+  normalizedContent Json?
+  contentHash String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  endpoints Endpoint[]
+
+  @@unique([projectId, contentHash])
+}
+
+model Endpoint {
+  id             String      @id @default(uuid())
+  specId         String
+  path           String
+  method         String
+  operationId    String?
+  riskScore      Int?
+  blockedByCycle Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  spec      OpenAPISpec @relation(fields: [specId], references: [id], onDelete: Cascade)
+  testCases TestCase[]
+}
+
+model Environment {
+  id        String    @id @default(uuid())
+  projectId String
+  name      String
+  variables Json      // e.g., { "BASE_URL": "https://api.dev.com", "API_KEY": "secret" }
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testRuns TestRun[]
+  testSchedules TestSchedule[]
+}
+
+model TestCase {
+  id               String         @id @default(uuid())
+  endpointId       String
+  name             String
+  type             String         @default("VALID")
+  status           TestCaseStatus @default(DRAFT)
+  enabled          Boolean        @default(true) // Deprecated: keeping for compatibility during transition
+  mutation         Json?
+  description      String?
+  requestBody      Json?
+  queryParams      Json?
+  pathParams       Json?
+  headers          Json?
+  expectedResponse Json?
+  
+  // Version Safety
+  originalPayload  Json?
+  version          Int            @default(1)
+  modifiedBy       String?
+  modifiedAt       DateTime?
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  endpoint    Endpoint     @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  testResults TestResult[]
+}
+
+model TestRunEvent {
+  id        String   @id @default(uuid())
+  sequence  BigInt   @unique @default(autoincrement())
+  testRunId String
+  name      String
+  jobId     String?
+  levelIndex Int?
+  percentage Int?
+  message   String?
+  createdAt DateTime @default(now())
+
+  testRun TestRun @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+
+  @@index([testRunId, sequence])
+}
+
+model TestRun {
+  id            String        @id @default(uuid())
+  projectId     String
+  environmentId String
+  status        TestRunStatus @default(CREATED)
+  startTime     DateTime?
+  endTime       DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  metrics             Json?
+  regressionAnalysis  Json?
+  totalTests          Int           @default(0)
+  currentLevel        Int           @default(0)
+  executionPlan       Json?
+  testCaseIds         Json?
+  failureReason       String?
+  triggerType         TriggerType   @default(MANUAL)
+  initiatedBy         String?
+  durationMs          Int?
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment Environment  @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  testResults TestResult[]
+  events      TestRunEvent[]
+}
+
+model TestSchedule {
+  id            String           @id @default(uuid())
+  projectId     String
+  environmentId String
+  testCaseIds   Json?
+  interval      ScheduleInterval @default(ONCE)
+  cron          String?
+  enabled       Boolean          @default(true)
+  createdBy     String
+  lastRunAt     DateTime?
+  nextRunAt     DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+}
+
+model TestResult {
+  id             String           @id @default(uuid())
+  testRunId      String
+  testCaseId     String
+  status         TestResultStatus @default(PENDING)
+  actualResponse Json?            // Full HTTP response
+  executionTimeMs Int?
+  levelIndex     Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  testRun  TestRun  @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  TESTER
+  DEVELOPER
+  VIEWER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INVITED
+}
+
+enum TestRunStatus {
+  CREATED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TestResultStatus {
+  PENDING
+  PASSED
+  FAILED
+  ERROR
+}
+
+enum TestCaseStatus {
+  DRAFT
+  READY
+  DISABLED
+  ARCHIVED
+}
+
+enum TriggerType {
+  MANUAL
+  SCHEDULED
+  CI
+}
+
+enum ScheduleInterval {
+  ONCE
+  DAILY
+  WEEKLY
+  CUSTOM
+}

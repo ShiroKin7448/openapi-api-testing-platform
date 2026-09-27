@@ -1,0 +1,37 @@
+openapi: 3.1.0
+info:
+  title: Dependency Cycle Fixture
+  version: 1.0.0
+paths:
+  /cycle-a:
+    get:
+      operationId: cycleA
+      parameters:
+        - name: bId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Returns aId
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { aId: { type: string } }
+  /cycle-b:
+    get:
+      operationId: cycleB
+      parameters:
+        - name: aId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Returns bId
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { bId: { type: string } }
