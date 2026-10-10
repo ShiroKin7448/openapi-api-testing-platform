@@ -82,7 +82,7 @@ export default function TestBuilder() {
         <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">Bước 2: Quản lý & Chỉnh sửa Kịch bản Kiểm thử</h1><p className="text-xs text-slate-500 mt-0.5">Chọn API ở cột bên trái, sửa payload và lưu thay đổi.</p></div>
         <div className="flex items-center space-x-2">
           <button onClick={saveCase} disabled={!activeCase || save.isPending} className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Save className="w-3.5 h-3.5" /><span>{save.isPending ? 'Đang lưu…' : 'Lưu kịch bản'}</span></button>
-          <button onClick={() => generate.mutate()} disabled={!selectedEndpointId || selectedEndpointId === 'ALL' || generate.isPending} className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Plus className="w-3.5 h-3.5" /><span>{generate.isPending ? 'Đang tạo…' : 'Tạo kịch bản'}</span></button>
+          <button onClick={() => generate.mutate()} disabled={!selectedEndpointId || selectedEndpointId === 'ALL' || cases.isLoading || Boolean(cases.data?.length) || generate.isPending} title={cases.data?.length ? 'Endpoint này đã có testcase; thao tác tạo không ghi đè testcase hiện có.' : undefined} className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Plus className="w-3.5 h-3.5" /><span>{generate.isPending ? 'Đang tạo…' : cases.data?.length ? 'Đã có kịch bản' : 'Tạo kịch bản'}</span></button>
           <span className="text-[11px] text-slate-500">Start a run from the project toolbar.</span>
         </div>
       </div>

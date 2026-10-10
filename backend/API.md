@@ -76,7 +76,7 @@ Endpoint method filter accepts `get`, `post`, `put`, `patch`, `delete`, `options
 | Method / URL | Auth | Request | Success | Errors |
 | --- | --- | --- | --- | --- |
 | `GET /endpoints/:endpointId/test-cases` | Project member | No body/query | 200; endpoint's persisted test case DTOs | 400; 403; 404 `ENDPOINT_NOT_FOUND` |
-| `POST /endpoints/:endpointId/test-cases/generate` | Project member | Empty JSON object or no content | 200; persisted VALID, BOUNDARY and NEGATIVE cases (existing cases are returned without automatic regeneration) | 400; 403; 404; 422 `NORMALIZED_ENDPOINT_NOT_FOUND` |
+| `POST /endpoints/:endpointId/test-cases/generate` | Project member | Empty JSON object or no content | 200; persisted VALID, BOUNDARY and NEGATIVE cases; supports `application/json`, `+json` media types, and `text/plain` with a string schema. Existing cases are returned without regeneration or overwrite. | 400; 403; 404; 422 `NORMALIZED_ENDPOINT_NOT_FOUND`, `UNSUPPORTED_REQUEST_BODY` |
 | `GET /projects/:projectId/test-cases` | Project member | No body/query | 200; project test cases | 400; 403; 404 |
 | `GET /test-cases/:testCaseId` | Project member | No body/query | 200; test case DTO | 400; 403; 404 `TEST_CASE_NOT_FOUND` |
 | `PATCH /test-cases/:testCaseId` | Project member | One or more of `{ "name": "...", "payload": {}, "expectedStatus": 200, "enabled": false }` | 200; updated DTO; negative mutation metadata remains on the record | 400; 403; 404 |

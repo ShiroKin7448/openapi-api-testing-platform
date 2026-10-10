@@ -3,6 +3,7 @@ import prisma from '../utils/prisma';
 import { DataGeneratorService } from './data-generator.service';
 import { NegativeGeneratorService } from './negative-generator.service';
 import { DependencyEdge, NormalizedEndpoint, Mutation } from '@shared/types';
+import { AppError } from '../utils/AppError';
 
 export type TestCaseKind = 'VALID' | 'BOUNDARY' | 'NEGATIVE';
 export interface TestCaseDto {
@@ -61,19 +62,34 @@ export class TestCaseService {
     const existing = await prisma.testCase.findMany({ where: { endpointId }, orderBy: { createdAt: 'asc' } }) ?? [];
     if (existing.length) return existing.map(testCaseDto);
 
-    const schema = endpoint.requestBody?.content['application/json']?.schema;
+    const contentEntries = Object.entries(endpoint.requestBody?.content ?? {});
+    const selectedContent = contentEntries.find(([mediaType]) => mediaType.toLowerCase() === 'application/json')
+      ?? contentEntries.find(([mediaType]) => mediaType.toLowerCase().endsWith('+json'))
+      ?? contentEntries.find(([mediaType, definition]) => mediaType.toLowerCase() === 'text/plain' && definition.schema.type === 'string');
+    if (endpoint.requestBody?.required && !selectedContent) {
+      throw new AppError('Required request body has no supported schema', 422, true, 'UNSUPPORTED_REQUEST_BODY');
+    }
+    const mediaType = selectedContent?.[0];
+    const schema = selectedContent?.[1].schema;
     const validPayload = schema ? this.dataGen.generateFromSchema(schema, 'body', incomingEdges) : null;
-    const parameters = (location: 'path' | 'query' | 'header'): Record<string, unknown> => Object.fromEntries(
+    const parameters = (location: 'path' | 'query' | 'header' | 'cookie'): Record<string, unknown> => Object.fromEntries(
       endpoint.parameters.filter((parameter) => parameter.in === location).map((parameter) => [
         parameter.name,
-        this.dataGen.generateFromSchema(parameter.schema, parameter.name, incomingEdges),
+        this.dataGen.generateFromSchema(parameter.schema, `${location}.${parameter.name}`, incomingEdges),
       ]),
     );
     const pathParams = parameters('path');
     const queryParams = parameters('query');
     const headers = parameters('header');
+    const cookieParams = parameters('cookie');
+    if (Object.keys(cookieParams).length) headers.Cookie = cookieParams;
+    if (mediaType) headers['Content-Type'] = mediaType;
     const success = endpoint.responses.find((response) => response.statusCode.startsWith('2')) ?? endpoint.responses[0];
-    const expectedStatus = success ? Number(success.statusCode) : 200;
+    const parsedSuccessStatus = success ? Number(success.statusCode) : NaN;
+    const expectedStatus = Number.isInteger(parsedSuccessStatus) ? parsedSuccessStatus : 200;
+    const negativeResponse = endpoint.responses.find((response) => response.statusCode === '400')
+      ?? endpoint.responses.find((response) => response.statusCode === '422');
+    const expectedNegativeStatus = negativeResponse?.statusCode ?? '400';
     const records: PrismaTestCase[] = [];
     const originalPayloadBase = {
       requestBody: validPayload,
@@ -91,37 +107,47 @@ export class TestCaseService {
     } as unknown as Prisma.TestCaseUncheckedCreateInput) }));
 
     if (schema && validPayload !== null) {
-      const mutations: Mutation[] = this.negGen.generateMutations(schema, validPayload);
-      for (const mutation of mutations) {
+      const mutations = this.negGen.generateMutations(schema, validPayload);
+      for (const candidate of mutations) {
+        const mutation: Mutation = { ...candidate, expectedFailure: `${expectedNegativeStatus} Bad Request` };
         const payload = this.applyMutation(validPayload, mutation);
         const kind: TestCaseKind = mutation.type === 'BOUNDARY' ? 'BOUNDARY' : 'NEGATIVE';
         records.push(await prisma.testCase.create({ data: ({
           endpointId, name: `${kind}: ${mutation.type} ${mutation.targetPath}`, type: kind, enabled: true, status: 'READY',
           description: `Generated ${kind.toLowerCase()} request`, requestBody: inputJson(payload),
           expectedResponse: { statusCode: mutation.expectedFailure.slice(0, 3) },
-          mutation: inputJson({ type: mutation.type, target: mutation.targetPath.replace(/^body\./, '') }),
-          originalPayload: inputJson({ ...originalPayloadBase, requestBody: payload, expectedResponse: { statusCode: mutation.expectedFailure.slice(0, 3) } })
+          mutation: inputJson({ type: mutation.type, target: displayMutationTarget(mutation.targetPath) }),
+          originalPayload: inputJson(originalPayloadBase)
         } as unknown as Prisma.TestCaseUncheckedCreateInput) }));
       }
     }
+
     return records.map(testCaseDto);
   }
 
   private applyMutation(payload: unknown, mutation: Mutation): unknown {
-    const root = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...(payload as Record<string, unknown>) } : {};
-    const path = mutation.targetPath.replace(/^body\./, '').split('.');
-    let cursor = root;
-    for (const segment of path.slice(0, -1)) {
-      const nested = cursor[segment];
-      if (!nested || typeof nested !== 'object' || Array.isArray(nested)) cursor[segment] = {};
-      else cursor[segment] = { ...(nested as Record<string, unknown>) };
-      cursor = cursor[segment] as Record<string, unknown>;
+    const clone = payload === undefined ? {} : JSON.parse(JSON.stringify(payload)) as unknown;
+    const segments = mutation.targetPath.replace(/^#\//, '').split('/').filter(Boolean).map((part) => part.replace(/~1/g, '/').replace(/~0/g, '~'));
+    if (!segments.length) return mutation.mutatedValue;
+    let cursor: unknown = clone;
+    for (const segment of segments.slice(0, -1)) {
+      const index = arrayIndex(segment);
+      if (Array.isArray(cursor) && index !== undefined) cursor = cursor[index];
+      else if (isRecord(cursor)) cursor = cursor[segment];
+      else throw new Error(`Cannot apply testcase mutation at ${mutation.targetPath}`);
     }
-    if (path.length) {
-      if (mutation.type === 'MISSING_REQUIRED') delete cursor[path[path.length - 1]];
-      else cursor[path[path.length - 1]] = mutation.mutatedValue;
+    const last = segments[segments.length - 1];
+    const lastIndex = arrayIndex(last);
+    if (Array.isArray(cursor) && lastIndex !== undefined) {
+      if (mutation.type === 'MISSING_REQUIRED') cursor.splice(lastIndex, 1);
+      else cursor[lastIndex] = mutation.mutatedValue;
+    } else if (isRecord(cursor)) {
+      if (mutation.type === 'MISSING_REQUIRED') delete cursor[last];
+      else cursor[last] = mutation.mutatedValue;
+    } else {
+      throw new Error(`Cannot apply testcase mutation at ${mutation.targetPath}`);
     }
-    return root;
+    return clone;
   }
 
   async listByEndpoint(endpointId: string): Promise<TestCaseDto[]> {
@@ -172,4 +198,18 @@ export class TestCaseService {
     if (updates.status !== undefined) data.status = updates.status as any;
     return testCaseDto(await prisma.testCase.update({ where: { id }, data }));
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function arrayIndex(value: string): number | undefined {
+  if (!/^(0|[1-9]\d*)$/.test(value)) return undefined;
+  const index = Number(value);
+  return Number.isSafeInteger(index) ? index : undefined;
+}
+
+function displayMutationTarget(targetPath: string): string {
+  return targetPath.replace(/^#\//, '').split('/').map((part) => part.replace(/~1/g, '/').replace(/~0/g, '~')).join('.');
 }

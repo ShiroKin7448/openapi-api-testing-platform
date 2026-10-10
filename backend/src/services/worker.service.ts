@@ -66,10 +66,24 @@ export class WorkerService {
     for (const [key, value] of Object.entries(jsonRecord(testJob.queryParams))) {
       if (value !== undefined && value !== null && typeof value !== 'object') requestUrl.searchParams.set(key, String(value));
     }
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = {};
+    let hasContentType = false;
     for (const [key, value] of Object.entries(jsonRecord(testJob.headers))) {
-      if (value !== undefined && value !== null && typeof value !== 'object') headers[key] = String(value);
+      if (key.toLowerCase() === 'cookie' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        const cookieValues = Object.entries(jsonRecord(value))
+          .filter(([, cookieValue]) => cookieValue !== undefined && cookieValue !== null && typeof cookieValue !== 'object')
+          .map(([cookieName, cookieValue]) => `${encodeURIComponent(cookieName)}=${encodeURIComponent(String(cookieValue))}`);
+        if (cookieValues.length) headers.Cookie = cookieValues.join('; ');
+      } else if (value !== undefined && value !== null && typeof value !== 'object') {
+        if (key.toLowerCase() === 'content-type') {
+          headers['Content-Type'] = String(value);
+          hasContentType = true;
+        } else {
+          headers[key] = String(value);
+        }
+      }
     }
+    if (!hasContentType) headers['Content-Type'] = 'application/json';
     if (variables.API_TOKEN && !Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')) {
       headers.Authorization = `Bearer ${variables.API_TOKEN}`;
     }
