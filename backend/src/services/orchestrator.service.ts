@@ -38,11 +38,10 @@ export class OrchestratorService {
     testCases: TestCase[],
     executionPlan: ExecutionPlan
   ): Promise<TestExecutionJob[]> {
-    // 1. Strict Failure Threshold: If any job in the current level failed, halt progression.
-    const hasFailures = completedJobs.some(job => job.status === 'FAILED');
-    if (hasFailures) {
-      await prisma.testRun.update({ where: { id: testRunId }, data: { status: 'FAILED' } });
-      throw new AppError(`Run halted: One or more jobs failed at execution level ${levelIndex}.`, 400);
+    // 1. Progression: Log status of completed level
+    const failedCount = completedJobs.filter(job => job.status === 'FAILED').length;
+    if (failedCount > 0) {
+      console.log(`[orchestrator] Level ${levelIndex} completed with ${failedCount} failed jobs out of ${completedJobs.length}. Continuing run...`);
     }
 
     // 2. Are we done?
@@ -85,7 +84,7 @@ export class OrchestratorService {
   /**
    * Prepares execution jobs for a specific level, resolving all ContextBindings.
    */
-  private async prepareLevelJobs(
+  public async prepareLevelJobs(
     testRunId: string,
     levelIndex: number,
     testCases: TestCase[],

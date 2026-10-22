@@ -41,6 +41,13 @@ export const getSpecEndpoints = async (req: AuthRequest, res: Response, next: Ne
   } catch (error) { next(error); }
 };
 
+export const getSpecFlow = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const flow = await catalogService.getSpecFlow(req.user!.id, req.params.specId);
+    res.status(200).json({ success: true, data: flow });
+  } catch (error) { next(error); }
+};
+
 export const deleteSpec = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     await catalogService.deleteSpec(req.user!.id, req.params.projectId, req.params.specId);

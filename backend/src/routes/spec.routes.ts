@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { deleteSpec, getSpec, getSpecEndpoints, getSpecs, importSpec } from '../controllers/spec.controller';
+import { deleteSpec, getSpec, getSpecEndpoints, getSpecFlow, getSpecs, importSpec } from '../controllers/spec.controller';
 import { requireAuth } from '../middlewares/requireAuth';
 import { openapiUpload } from '../middlewares/openapiUpload';
 import { validateRequest } from '../middlewares/validateRequest';
@@ -24,6 +24,7 @@ const endpointQuery = z.object({
 const specParams = z.object({ specId: idSchema });
 specRouter.get('/:specId', requireAuth, validateRequest({ params: specParams, query: noQueryParams }), getSpec);
 specRouter.get('/:specId/endpoints', requireAuth, validateRequest({ params: specParams, query: endpointQuery }), getSpecEndpoints);
+specRouter.get('/:specId/flow', requireAuth, validateRequest({ params: specParams, query: noQueryParams }), getSpecFlow);
 
 export { projectRouter as projectSpecRoutes, specRouter as specRoutes };
 export default projectRouter;
