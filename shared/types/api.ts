@@ -65,8 +65,48 @@ export interface UpdateTestCaseRequest {
 }
 export interface CreateTestRunRequest { environmentId: string; specId?: string; }
 
+export interface RiskFactor {
+  factor: string;
+  points: number;
+  description: string;
+}
+
 export interface EndpointCatalogItem extends Pick<Endpoint, 'id' | 'specId' | 'path' | 'method' | 'operationId' | 'riskScore' | 'blockedByCycle' | 'createdAt' | 'updatedAt'> {
   tags: string[];
+  riskLevel?: 'HIGH' | 'MEDIUM' | 'LOW';
+  riskFactors?: RiskFactor[];
+}
+
+export interface DownstreamConsumer {
+  targetNodeId: string;
+  targetPath: string;
+  targetMethod: string;
+  consumedParam: string;
+  source: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface EndpointFlowItem {
+  endpointId: string;
+  nodeId: string;
+  path: string;
+  method: string;
+  levelIndex: number;
+  prerequisites: DependencyEdge[];
+  dependents: DependencyEdge[];
+  downstreamConsumers?: DownstreamConsumer[];
+}
+
+export interface SpecFlowResponse {
+  graph: {
+    nodes: string[];
+    edges: DependencyEdge[];
+  };
+  plan: {
+    levels: string[][];
+    cyclicComponents: Array<{ nodes: string[] }>;
+  };
+  endpointFlows: EndpointFlowItem[];
 }
 
 export interface ImportSpecResult {

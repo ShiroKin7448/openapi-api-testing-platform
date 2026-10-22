@@ -82,7 +82,11 @@ describe('TestCaseService', () => {
 
       expect(prisma.testCase.update).toHaveBeenCalledWith({
         where: { id: 'tc-1' },
-        data: { requestBody: { custom: 'override' } }
+        data: expect.objectContaining({
+          requestBody: { custom: 'override' },
+          version: { increment: 1 },
+          modifiedAt: expect.any(Date),
+        })
       });
       expect(result.requestBody).toEqual({ custom: 'override' });
     });
@@ -106,6 +110,65 @@ describe('TestCaseService', () => {
       (prisma.testCase.findMany as jest.Mock).mockResolvedValueOnce([{ ...generated[0], requestBody: generated[0].payload, expectedResponse: { statusCode: '201' } }]);
       expect(await service.generateForEndpoint('ep-1', endpoint)).toHaveLength(1);
       expect(prisma.testCase.create).toHaveBeenCalledTimes(generated.length);
+    });
+
+    it('supports +json request media types, cookie parameters, nested mutations, and preserves the valid original payload', async () => {
+      const endpoint: NormalizedEndpoint = {
+        path: '/users',
+        method: 'patch',
+        parameters: [{ name: 'session', in: 'cookie', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/merge-patch+json': { schema: {
+              type: 'object',
+              required: ['profile'],
+              properties: {
+                profile: { type: 'object', required: ['displayName'], properties: {
+                  displayName: { type: 'string', maxLength: 5 },
+                } },
+              },
+            } },
+          },
+        },
+        responses: [{ statusCode: '200' }, { statusCode: '400' }],
+      };
+      (prisma.testCase.create as jest.Mock).mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+        id: `tc-${String(args.data.type)}-${String(args.data.name)}`,
+        endpointId: 'ep-media',
+        ...args.data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      const generated = await service.generateForEndpoint('ep-media', endpoint);
+      const valid = generated.find((item) => item.type === 'VALID');
+      const negative = generated.find((item) => item.mutation
+        && (item.mutation as { target?: string; type?: string }).target === 'profile.displayName'
+        && (item.mutation as { target?: string; type?: string }).type === 'NULL_VIOLATION');
+      expect(valid?.requestBody).toEqual({ profile: { displayName: expect.any(String) } });
+      expect(valid?.headers).toMatchObject({
+        'Content-Type': 'application/merge-patch+json',
+        Cookie: { session: expect.any(String) },
+      });
+      expect(negative?.requestBody).toEqual({ profile: { displayName: null } });
+      expect(negative?.originalPayload).toMatchObject({
+        requestBody: { profile: { displayName: (valid?.requestBody as { profile: { displayName: string } }).profile.displayName } },
+        expectedResponse: { statusCode: '200' },
+      });
+      expect(negative?.expectedStatus).toBe(400);
+    });
+
+    it('rejects a required request body with no supported schema instead of saving an empty valid case', async () => {
+      const endpoint: NormalizedEndpoint = {
+        path: '/upload',
+        method: 'post',
+        parameters: [],
+        requestBody: { required: true, content: { 'application/octet-stream': { schema: { type: 'string' } } } },
+        responses: [{ statusCode: '201' }],
+      };
+      await expect(service.generateForEndpoint('ep-upload', endpoint)).rejects.toMatchObject({ code: 'UNSUPPORTED_REQUEST_BODY' });
+      expect(prisma.testCase.create).not.toHaveBeenCalled();
     });
 
     it('lists persisted cases and supports payload and enabled overrides', async () => {

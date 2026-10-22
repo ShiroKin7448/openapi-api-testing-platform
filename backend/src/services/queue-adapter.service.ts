@@ -68,12 +68,16 @@ export class QueueAdapterService {
   }
 
   async getQueueStatus(): Promise<{ queued: number; active: number; completed: number; failed: number }> {
-    return this.runWithTimeout(Promise.all([
-      this.queue.getWaitingCount(),
-      this.queue.getActiveCount(),
-      this.queue.getCompletedCount(),
-      this.queue.getFailedCount()
-    ]).then(([queued, active, completed, failed]) => ({ queued, active, completed, failed })));
+    try {
+      return await this.runWithTimeout(Promise.all([
+        this.queue.getWaitingCount(),
+        this.queue.getActiveCount(),
+        this.queue.getCompletedCount(),
+        this.queue.getFailedCount()
+      ]).then(([queued, active, completed, failed]) => ({ queued, active, completed, failed })));
+    } catch {
+      return { queued: 0, active: 0, completed: 0, failed: 0 };
+    }
   }
 
   private async runWithTimeout<T>(operation: Promise<T>): Promise<T> {

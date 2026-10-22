@@ -1,6 +1,6 @@
 import { apiClient } from './axios';
 import type { ApiEnvelope, SpecSummary } from './api.types';
-import type { EndpointCatalogItem } from '@shared/types';
+import type { EndpointCatalogItem, SpecFlowResponse } from '@shared/types';
 
 export interface ImportSpecResult {
   specId: string;
@@ -13,6 +13,7 @@ export const openapiApi = {
   list: async (projectId: string): Promise<SpecSummary[]> => (await apiClient.get<ApiEnvelope<SpecSummary[]>>(`/projects/${projectId}/specs`)).data.data,
   get: async (specId: string): Promise<SpecSummary> => (await apiClient.get<ApiEnvelope<SpecSummary>>(`/specs/${specId}`)).data.data,
   endpoints: async (specId: string): Promise<EndpointCatalogItem[]> => (await apiClient.get<ApiEnvelope<EndpointCatalogItem[]>>(`/specs/${specId}/endpoints`)).data.data,
+  flow: async (specId: string): Promise<SpecFlowResponse> => (await apiClient.get<ApiEnvelope<SpecFlowResponse>>(`/specs/${specId}/flow`)).data.data,
   importFile: async (projectId: string, file: File, onUploadProgress?: (progress: number) => void): Promise<ImportSpecResult> => {
     const body = new FormData();
     body.append('file', file);

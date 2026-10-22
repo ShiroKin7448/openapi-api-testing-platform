@@ -85,7 +85,7 @@ export class OrchestratorService {
   /**
    * Prepares execution jobs for a specific level, resolving all ContextBindings.
    */
-  private async prepareLevelJobs(
+  public async prepareLevelJobs(
     testRunId: string,
     levelIndex: number,
     testCases: TestCase[],

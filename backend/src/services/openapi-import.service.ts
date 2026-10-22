@@ -1,4 +1,5 @@
 import SwaggerParser from '@readme/openapi-parser';
+// @ts-ignore
 import { load as parseYaml } from 'js-yaml';
 import type { OpenAPI } from 'openapi-types';
 import { AppError } from '../utils/AppError';

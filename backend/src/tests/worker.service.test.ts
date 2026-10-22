@@ -58,6 +58,22 @@ describe('WorkerService - Strict Retry Policy', () => {
     expect(axios).toHaveBeenCalledWith(expect.objectContaining({ maxRedirects: 0 }));
   });
 
+  it('uses the generated Content-Type and serializes cookie parameters', async () => {
+    (axios as unknown as jest.Mock).mockResolvedValue({ status: 200, data: {}, headers: {} });
+    const job = createMockJob();
+    job.data.headers = {
+      'Content-Type': 'application/merge-patch+json',
+      Cookie: { session: 'a b' },
+    };
+    await worker.processJob(job);
+    expect(axios).toHaveBeenCalledWith(expect.objectContaining({
+      headers: {
+        'Content-Type': 'application/merge-patch+json',
+        Cookie: 'session=a%20b',
+      },
+    }));
+  });
+
   it('rejects an endpoint path that changes the configured environment host', async () => {
     (prisma.testCase.findUnique as jest.Mock).mockResolvedValue({
       id: 'tc-1', endpoint: { method: 'get', path: '//attacker.example/private', operationId: 'hostOverride', spec: { normalizedContent: { endpoints: [] } } },

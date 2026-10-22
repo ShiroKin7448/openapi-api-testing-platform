@@ -32,7 +32,14 @@ export class ResultCollectorService {
     const isSuccess = response.status.toString() === expectedStatus && validation.isValid;
     const finalStatus = isSuccess ? TestResultStatus.PASSED : TestResultStatus.FAILED;
 
-    // 1. Save Result to Database
+    // 1. Save Result to Database (avoid duplicates if worker and in-process runner run concurrently)
+    const existingResult = await prisma.testResult.findFirst({
+      where: { testRunId: job.testRunId, testCaseId: job.testCaseId }
+    });
+    if (existingResult) {
+      return;
+    }
+
     await prisma.testResult.create({
       data: ({
         testRunId: job.testRunId,

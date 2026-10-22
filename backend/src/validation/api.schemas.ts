@@ -68,7 +68,7 @@ export const testCaseBulkStatusBody = z.object({
   ids: z.array(idSchema).min(1),
   status: z.enum(['DRAFT', 'READY', 'DISABLED', 'ARCHIVED']),
 }).strict();
-export const createTestRunBody = z.object({ environmentId: idSchema, testCaseIds: z.array(idSchema).min(1).optional() }).strict();
+export const createTestRunBody = z.object({ environmentId: idSchema.optional().or(z.literal('')), testCaseIds: z.array(idSchema).min(1).optional() }).strict();
 export const testRunParams = z.object({ testRunId: idSchema });
 export const testRunResultsQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
