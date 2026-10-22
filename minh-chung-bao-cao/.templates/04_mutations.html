@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Chi tiết kỹ thuật Constraint-Based Mutation Testing</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #090e17;
+      color: #e2e8f0;
+      padding: 24px;
+      width: 1440px;
+      height: 960px;
+      overflow: hidden;
+    }
+    .window {
+      background: #0d1527;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      height: 912px;
+      display: flex;
+      flex-direction: column;
+    }
+    .titlebar {
+      height: 40px;
+      background: #141e33;
+      border-top-left-radius: 14px;
+      border-top-right-radius: 14px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      border-bottom: 1px solid #1e293b;
+    }
+    .traffic-lights { display: flex; gap: 8px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
+    .window-title {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    .header-bar {
+      padding: 16px 28px;
+      background: #0f182c;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-title h1 {
+      font-size: 19px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-title p {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 3px;
+    }
+    .badge-contract {
+      background: #1e293b;
+      border: 1px solid #334155;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #38bdf8;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    /* Content */
+    .content-area {
+      padding: 20px 28px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Schema strip */
+    .schema-strip {
+      background: #111a2d;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .schema-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .schema-tag {
+      background: #3b82f6;
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .schema-rules {
+      font-family: ui-monospace, monospace;
+      font-size: 12.5px;
+      color: #cbd5e1;
+    }
+    .schema-rules strong { color: #f43f5e; }
+
+    /* Grid of 4 Cards */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      flex: 1;
+    }
+
+    .card {
+      background: #111a2d;
+      border: 1px solid #22324b;
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+    }
+    .card.valid {
+      border-color: #10b981;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+    }
+    .card.missing {
+      border-color: #ef4444;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+    }
+    .card.type {
+      border-color: #f59e0b;
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+    }
+    .card.null-v {
+      border-color: #a855f7;
+      box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-badge {
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .badge-green { background: #064e3b; color: #6ee7b7; border: 1px solid #047857; }
+    .badge-red { background: #450a0a; color: #fca5a5; border: 1px solid #991b1b; }
+    .badge-amber { background: #451a03; color: #fcd34d; border: 1px solid #b45309; }
+    .badge-purple { background: #3b0764; color: #d8b4fe; border: 1px solid #6b21a8; }
+
+    .code-box {
+      background: #090e17;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #cbd5e1;
+      flex: 1;
+      margin-bottom: 10px;
+    }
+    .key { color: #38bdf8; }
+    .str { color: #a7f3d0; }
+    .num { color: #fde047; }
+    .null-kw { color: #f43f5e; font-weight: 700; }
+    .comment { color: #64748b; font-style: italic; }
+    .highlight-err {
+      background: rgba(239, 68, 68, 0.2);
+      padding: 1px 4px;
+      border-radius: 3px;
+      border: 1px dashed #ef4444;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 10px;
+      border-top: 1px solid #1e293b;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .expected-status {
+      font-family: monospace;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .status-200 { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-400 { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+    /* Bottom Info */
+    .bottom-info {
+      background: #111a2d;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 12px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="traffic-lights">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+      </div>
+      <div class="window-title">Constraint-Based Test Data Generator — Payload Mutation Analysis</div>
+    </div>
+
+    <div class="header-bar">
+      <div class="header-title">
+        <h1>🧬 Chi tiết kỹ thuật: Sinh dữ liệu kiểm thử dựa trên ràng buộc (Constraint-Based)</h1>
+        <p>So sánh Payload hợp lệ cơ sở (Baseline) và 3 kỹ thuật đột biến (Mutations) tự động cho POST /api/v1/auth/login</p>
+      </div>
+      <div class="badge-contract">Target Endpoint: POST /login</div>
+    </div>
+
+    <div class="content-area">
+      <!-- Schema Contract Strip -->
+      <div class="schema-strip">
+        <div class="schema-info">
+          <span class="schema-tag">OpenAPI Schema Contract</span>
+          <span class="schema-rules">
+            properties: { <strong>email</strong>: [type: string, format: email], <strong>password</strong>: [type: string, minLength: 8] },
+            required: [<strong>"email"</strong>, <strong>"password"</strong>],
+            additionalProperties: false
+          </span>
+        </div>
+        <span style="font-size: 11.5px; color: #10b981; font-weight: 600;">✓ Strict Validation Mode</span>
+      </div>
+
+      <!-- 4 Cards Grid -->
+      <div class="cards-grid">
+        <!-- Card 1: VALID -->
+        <div class="card valid">
+          <div class="card-top">
+            <div class="card-title">
+              <span style="color: #10b981;">✔</span>
+              <span>1. Valid Baseline (Hợp lệ)</span>
+            </div>
+            <span class="card-badge badge-green">POSITIVE TEST</span>
+          </div>
+          <div class="code-box">
+{<br>
+&nbsp;&nbsp;<span class="key">"email"</span>: <span class="str">"test@example.com"</span>,<br>
+&nbsp;&nbsp;<span class="key">"password"</span>: <span class="str">"valid_secret_pass_123"</span><br>
+}<br>
+<span class="comment">// Dữ liệu sinh đúng định dạng regex email & minLength</span>
+          </div>
+          <div class="card-footer">
+            <span>Thuật toán: JSON Schema Fuzzer (Generator)</span>
+            <div>Kỳ vọng: <span class="expected-status status-200">200 OK</span></div>
+          </div>
+        </div>
+
+        <!-- Card 2: MISSING REQUIRED -->
+        <div class="card missing">
+          <div class="card-top">
+            <div class="card-title">
+              <span style="color: #ef4444;">✖</span>
+              <span>2. Mutation: MISSING_REQUIRED</span>
+            </div>
+            <span class="card-badge badge-red">NEGATIVE TEST</span>
+          </div>
+          <div class="code-box">
+{<br>
+&nbsp;&nbsp;<span class="comment">// &lt;-- Trường "email" (required) bị lược bỏ hoàn toàn</span><br>
+&nbsp;&nbsp;<span class="key">"password"</span>: <span class="str">"valid_secret_pass_123"</span><br>
+}<br>
+<span class="comment">// Kiểm tra phản hồi khi Client thiếu trường bắt buộc</span>
+          </div>
+          <div class="card-footer">
+            <span>Đột biến: Loại bỏ thuộc tính trong required[]</span>
+            <div>Kỳ vọng: <span class="expected-status status-400">400 Bad Request</span></div>
+          </div>
+        </div>
+
+        <!-- Card 3: TYPE MISMATCH -->
+        <div class="card type">
+          <div class="card-top">
+            <div class="card-title">
+              <span style="color: #f59e0b;">⚠</span>
+              <span>3. Mutation: TYPE_MISMATCH</span>
+            </div>
+            <span class="card-badge badge-amber">NEGATIVE TEST</span>
+          </div>
+          <div class="code-box">
+{<br>
+&nbsp;&nbsp;<span class="key">"email"</span>: <span class="highlight-err"><span class="num">12345</span></span>, <span class="comment">// Kiểu number thay vì string</span><br>
+&nbsp;&nbsp;<span class="key">"password"</span>: <span class="str">"valid_secret_pass_123"</span><br>
+}<br>
+<span class="comment">// Kiểm tra Type Validator phía Server</span>
+          </div>
+          <div class="card-footer">
+            <span>Đột biến: Thay đổi kiểu dữ liệu (Type Inversion)</span>
+            <div>Kỳ vọng: <span class="expected-status status-400">400 Bad Request</span></div>
+          </div>
+        </div>
+
+        <!-- Card 4: NULL VIOLATION -->
+        <div class="card null-v">
+          <div class="card-top">
+            <div class="card-title">
+              <span style="color: #a855f7;">⚡</span>
+              <span>4. Mutation: NULL_VIOLATION</span>
+            </div>
+            <span class="card-badge badge-purple">NEGATIVE TEST</span>
+          </div>
+          <div class="code-box">
+{<br>
+&nbsp;&nbsp;<span class="key">"email"</span>: <span class="highlight-err"><span class="null-kw">null</span></span>, <span class="comment">// nullable = false</span><br>
+&nbsp;&nbsp;<span class="key">"password"</span>: <span class="str">"valid_secret_pass_123"</span><br>
+}<br>
+<span class="comment">// Kiểm tra xử lý giá trị null không được phép</span>
+          </div>
+          <div class="card-footer">
+            <span>Đột biến: Tiêm giá trị Null vào non-nullable field</span>
+            <div>Kỳ vọng: <span class="expected-status status-400">400 Bad Request</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Info -->
+      <div class="bottom-info">
+        <div>
+          📌 <strong>Nguyên lý:</strong> Dựa trên AST (Abstract Syntax Tree) của JSON Schema, thuật toán sinh tự động các đột biến nhằm phát hiện lỗ hổng kiểm tra dữ liệu đầu vào.
+        </div>
+        <div style="color: #38bdf8; font-weight: 600;">
+          Tổng số đột biến tự động: <strong>6 mutations / endpoint</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

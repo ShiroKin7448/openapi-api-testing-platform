@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
-import { DependencyGraph, EndpointCatalogItem, ExecutionPlan, ImportSpecResult, NormalizedEndpoint, NormalizedOpenAPIDocument, WorkspaceRole } from '@shared/types';
+import { DependencyGraph, EndpointCatalogItem, ExecutionPlan, ImportSpecResult, NormalizedEndpoint, NormalizedOpenAPIDocument, RiskFactor, SpecFlowResponse, WorkspaceRole } from '@shared/types';
 import { AppError } from '../utils/AppError';
 import prisma from '../utils/prisma';
 import { DependencyAnalyzerService } from './dependency-analyzer.service';
@@ -9,6 +9,7 @@ import { OpenAPIImportService } from './openapi-import.service';
 import { OpenAPINormalizerService } from './openapi-normalizer.service';
 import { RiskAnalyzerService } from './risk-analyzer.service';
 import { WorkspaceService, ALL_MEMBER_ROLES } from './workspace.service';
+import { TestCaseService } from './test-case.service';
 
 export interface OpenApiSource {
   fileName?: string;
@@ -81,8 +82,35 @@ function endpointTags(content: Prisma.JsonValue, path: string, method: string): 
 function endpointResult<T extends { id: string; specId: string; path: string; method: string; operationId: string | null; riskScore: number | null; blockedByCycle: boolean; createdAt: Date; updatedAt: Date }>(
   endpoint: T,
   content: Prisma.JsonValue,
+  normalized?: NormalizedEndpoint,
+  requiresAuth?: boolean
 ): EndpointCatalogItem {
-  return { ...endpoint, tags: endpointTags(content, endpoint.path, endpoint.method) };
+  const score = endpoint.riskScore ?? 0;
+  const riskLevel: 'HIGH' | 'MEDIUM' | 'LOW' = score >= 70 ? 'HIGH' : score >= 40 ? 'MEDIUM' : 'LOW';
+  let riskFactors: RiskFactor[] | undefined;
+  if (normalized) {
+    riskFactors = riskAnalyzer.analyzeRiskWithDetails(normalized, requiresAuth ?? false).factors;
+  } else {
+    const method = endpoint.method.toUpperCase();
+    const factors: RiskFactor[] = [];
+    if (method === 'DELETE') {
+      factors.push({ factor: 'HTTP Method (Destructive)', points: 40, description: 'Phương thức DELETE xoá dữ liệu vĩnh viễn.' });
+    } else if (['POST', 'PUT', 'PATCH'].includes(method)) {
+      factors.push({ factor: 'HTTP Method (Mutation)', points: 20, description: `Phương thức ${method} làm thay đổi trạng thái dữ liệu.` });
+    } else {
+      factors.push({ factor: 'HTTP Method (Safe/Read-only)', points: 0, description: `Phương thức ${method} chỉ đọc dữ liệu an toàn.` });
+    }
+    if (score >= 50) {
+      factors.push({ factor: 'Authentication (Public / Sensitive)', points: 30, description: 'Endpoint công khai hoặc xử lý dữ liệu định danh người dùng.' });
+    }
+    riskFactors = factors;
+  }
+  return {
+    ...endpoint,
+    tags: endpointTags(content, endpoint.path, endpoint.method),
+    riskLevel,
+    riskFactors,
+  };
 }
 
 export class OpenApiCatalogService {
@@ -158,22 +186,19 @@ export class OpenApiCatalogService {
     const contentHash = createHash('sha256').update(canonicalJson(content)).digest('hex');
 
     try {
-      const previousSpecs = await prisma.openAPISpec.findMany({
-        where: { projectId, version: imported.version },
-        include: { endpoints: { orderBy: { riskScore: 'desc' } } },
-        orderBy: { createdAt: 'desc' },
-      });
-      const duplicate = previousSpecs.find((spec) => canonicalJson(spec.content) === canonicalJson(content));
-      if (duplicate) {
-        return {
-          created: false,
-          result: {
-            specId: duplicate.id,
-            version: duplicate.version,
-            endpointCount: duplicate.endpoints.length,
-            endpoints: duplicate.endpoints.map((endpoint) => endpointResult(endpoint, duplicate.content)),
+      // Clean up previous specs for this project to eliminate duplicate endpoints
+      await prisma.openAPISpec.deleteMany({ where: { projectId } });
+
+      // Auto-create default environment if project has none
+      const envCount = await prisma.environment.count({ where: { projectId } });
+      if (envCount === 0) {
+        await prisma.environment.create({
+          data: {
+            name: 'Môi trường mặc định (Localhost:3000)',
+            projectId,
+            variables: { BASE_URL: 'http://localhost:3000' },
           },
-        };
+        });
       }
 
       const persisted = await prisma.$transaction(async (transaction) => {
@@ -200,6 +225,24 @@ export class OpenApiCatalogService {
         }
         return { spec, endpoints };
       });
+
+      // Auto-generate complete test cases for ALL endpoints immediately upon import
+      const testCaseService = new TestCaseService();
+      for (const epRow of persisted.endpoints) {
+        const normEp = imported.normalized.endpoints.find(
+          (e) => e.path === epRow.path && e.method.toLowerCase() === epRow.method.toLowerCase()
+        );
+        if (normEp) {
+          const nodeId = normEp.operationId || `${normEp.method.toUpperCase()} ${normEp.path}`;
+          const incomingEdges = graph.edges.filter((e) => e.to === nodeId);
+          try {
+            await testCaseService.generateForEndpoint(epRow.id, normEp, incomingEdges);
+          } catch (genErr) {
+            console.warn(`[importSpec] Auto-generate test cases error for ${nodeId}:`, genErr);
+          }
+        }
+      }
+
       return {
         created: true,
         result: { specId: persisted.spec.id, version: persisted.spec.version, endpointCount: persisted.endpoints.length, endpoints: persisted.endpoints },
@@ -267,13 +310,74 @@ export class OpenApiCatalogService {
     });
     if (!spec) throw new AppError('OpenAPI specification not found', 404, true, 'SPEC_NOT_FOUND');
     await workspaceService.requireRole(userId, spec.project.workspaceId, ALL_MEMBER_ROLES);
+    const normalizedDoc = spec.normalizedContent as unknown as NormalizedOpenAPIDocument | null;
+    const normalizedEndpoints = Array.isArray(normalizedDoc?.endpoints) ? normalizedDoc!.endpoints : [];
+
     return spec.endpoints
-      .map((endpoint) => endpointResult(endpoint, spec.content))
+      .map((endpoint) => {
+        const norm = normalizedEndpoints.find((e) => e.path === endpoint.path && e.method.toLowerCase() === endpoint.method.toLowerCase());
+        const requiresAuth = norm ? this.endpointRequiresAuth(norm, spec.content) : false;
+        return endpointResult(endpoint, spec.content, norm, requiresAuth);
+      })
       .filter((endpoint) => !filters.method || endpoint.method.toLowerCase() === filters.method.toLowerCase())
       .filter((endpoint) => !filters.tag || endpoint.tags.some((tag) => tag.toLowerCase() === filters.tag!.toLowerCase()))
       .filter((endpoint) => filters.minRiskScore === undefined || (endpoint.riskScore ?? 0) >= filters.minRiskScore)
       .filter((endpoint) => filters.maxRiskScore === undefined || (endpoint.riskScore ?? 0) <= filters.maxRiskScore)
       .filter((endpoint) => !filters.search || `${endpoint.path} ${endpoint.operationId ?? ''}`.toLowerCase().includes(filters.search.toLowerCase()));
+  }
+
+  async getSpecFlow(userId: string, specId: string): Promise<SpecFlowResponse> {
+    const spec = await prisma.openAPISpec.findUnique({
+      where: { id: specId },
+      include: { project: { select: { workspaceId: true } }, endpoints: { orderBy: { riskScore: 'desc' } } },
+    });
+    if (!spec) throw new AppError('OpenAPI specification not found', 404, true, 'SPEC_NOT_FOUND');
+    await workspaceService.requireRole(userId, spec.project.workspaceId, ALL_MEMBER_ROLES);
+
+    const normalizedDoc = spec.normalizedContent as unknown as NormalizedOpenAPIDocument | null;
+    if (!normalizedDoc || !Array.isArray(normalizedDoc.endpoints)) {
+      throw new AppError('Normalized OpenAPI document not available for flow analysis', 422, true, 'NO_NORMALIZED_ENDPOINTS');
+    }
+
+    const graph: DependencyGraph = dependencyAnalyzer.analyze(normalizedDoc);
+    const plan: ExecutionPlan = executionPlanner.planExecution(graph);
+
+    const endpointFlows = spec.endpoints.map((ep) => {
+      const nodeId = ep.operationId || `${ep.method.toUpperCase()} ${ep.path}`;
+      const prerequisites = graph.edges.filter((e) => e.to === nodeId);
+      const dependents = graph.edges.filter((e) => e.from === nodeId);
+      const levelIndex = plan.levels.findIndex((lvl) => lvl.includes(nodeId));
+
+      const downstreamConsumers = dependents.map((edge) => {
+        const targetEp = spec.endpoints.find((e) => (e.operationId || `${e.method.toUpperCase()} ${e.path}`) === edge.to);
+        const consumedParam = edge.source.replace(/^.*: /, '').trim();
+        return {
+          targetNodeId: edge.to,
+          targetPath: targetEp?.path ?? edge.to.replace(/^[A-Z]+\s+/, ''),
+          targetMethod: (targetEp?.method ?? edge.to.split(' ')[0] ?? 'GET').toUpperCase(),
+          consumedParam,
+          source: edge.source,
+          confidence: edge.confidence,
+        };
+      });
+
+      return {
+        endpointId: ep.id,
+        nodeId,
+        path: ep.path,
+        method: ep.method,
+        levelIndex: levelIndex >= 0 ? levelIndex : 0,
+        prerequisites,
+        dependents,
+        downstreamConsumers,
+      };
+    });
+
+    return {
+      graph,
+      plan,
+      endpointFlows,
+    };
   }
 
   async deleteSpec(userId: string, projectId: string, specId: string): Promise<void> {

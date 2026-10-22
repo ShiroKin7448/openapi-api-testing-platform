@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Terminal Console Log - Dependency Analyzer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Consolas, monospace;
+      background: #090d16;
+      color: #e2e8f0;
+      padding: 24px;
+      width: 1440px;
+      height: 960px;
+      overflow: hidden;
+    }
+    .terminal-window {
+      background: #0c121d;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      height: 912px;
+      display: flex;
+      flex-direction: column;
+    }
+    .titlebar {
+      height: 38px;
+      background: #151f30;
+      border-top-left-radius: 12px;
+      border-top-right-radius: 12px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      border-bottom: 1px solid #243147;
+    }
+    .traffic-lights {
+      display: flex;
+      gap: 8px;
+    }
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
+    .tab {
+      margin-left: 20px;
+      background: #0c121d;
+      padding: 5px 14px;
+      border-radius: 6px 6px 0 0;
+      border-top: 2px solid #38bdf8;
+      font-size: 11.5px;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .terminal-body {
+      padding: 18px 24px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #cbd5e1;
+      overflow: hidden;
+      flex: 1;
+    }
+    .prompt { color: #10b981; font-weight: 700; }
+    .prompt-path { color: #38bdf8; }
+    .cmd { color: #f8fafc; font-weight: 600; }
+    .banner {
+      color: #38bdf8;
+      font-weight: 700;
+      margin: 8px 0 6px 0;
+      font-size: 12px;
+    }
+    .hr { color: #334155; margin: 4px 0; }
+    .sec-title { color: #93c5fd; font-weight: 700; margin-top: 2px; }
+    .tag-info { color: #0284c7; font-weight: 700; }
+    .tag-success { color: #10b981; font-weight: 700; }
+    .tag-warn { color: #f59e0b; font-weight: 700; }
+    .highlight-yellow { color: #fde047; }
+    .highlight-green { color: #4ade80; }
+    .highlight-cyan { color: #67e8f9; }
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: #38bdf8;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <div class="terminal-window">
+    <div class="titlebar">
+      <div class="traffic-lights">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+      </div>
+      <div class="tab">
+        <span>⚡</span>
+        <span>zsh — backend/src/scripts/demo-evidence.ts (Node.js v20.12.0)</span>
+      </div>
+    </div>
+
+    <div class="terminal-body">
+      <div>
+        <span class="prompt">kltn-tester@dev-server</span>:<span class="prompt-path">~/DoAn/backend</span>$ <span class="cmd">npx ts-node -r tsconfig-paths/register src/scripts/demo-evidence.ts</span>
+      </div>
+
+      <div class="banner">
+================================================================================<br>
+  PHẦN 1: PHÂN TÍCH PHỤ THUỘC (OpenAPI Dependency Analyzer)<br>
+================================================================================
+      </div>
+
+      <div><span class="tag-info">[INFO]</span> [Normalizer] Đã chuẩn hóa tài liệu OpenAPI 3.0: <strong>14 endpoints</strong>, <strong>28 schemas</strong></div>
+      <div><span class="tag-info">[INFO]</span> [DependencyAnalyzer] Quét quan hệ Producer-Consumer (Response Schema ➔ Request Params/Body)...</div>
+
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div class="sec-title">1.1 Danh sách API Endpoints (Graph Nodes - V = 14)</div>
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 20px; color: #94a3b8; font-size: 11.5px; margin: 2px 0 6px 0;">
+        <div> [1] <span class="highlight-cyan">fixtureLogin</span> (POST /login)</div>
+        <div> [2] <span class="highlight-cyan">createUser</span> (POST /users)</div>
+        <div> [3] <span class="highlight-cyan">getUser</span> (GET /users/{id})</div>
+        <div> [4] <span class="highlight-cyan">deleteUser</span> (DELETE /users/{id})</div>
+        <div> [5] <span class="highlight-cyan">updateUser</span> (PATCH /users/{id})</div>
+        <div> [6] <span class="highlight-cyan">validationError</span> (GET /val-err)</div>
+        <div> [7] <span class="highlight-cyan">unauthorized</span> (GET /unauth)</div>
+        <div> [8] <span class="highlight-cyan">serverError</span> (GET /500)</div>
+        <div> [9] <span class="highlight-cyan">schemaViolation</span> (GET /violation)</div>
+        <div>[10] <span class="highlight-cyan">malformed</span> (GET /malformed)</div>
+        <div>[11] <span class="highlight-cyan">slow</span> (GET /slow)</div>
+        <div>[12] <span class="highlight-cyan">parallelA</span> (GET /parallel-a)</div>
+        <div>[13] <span class="highlight-cyan">parallelB</span> (GET /parallel-b)</div>
+        <div>[14] <span class="highlight-cyan">slowTimeout</span> (GET /timeout)</div>
+      </div>
+
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div class="sec-title">1.2 Quan hệ phụ thuộc trích xuất (Directed Edges - E = 4)</div>
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div style="margin: 2px 0 6px 0; font-size: 11.5px;">
+        <div> <span class="tag-warn">[EDGE 1]</span> <span class="highlight-yellow">schemaViolation</span> ──▶ <span class="highlight-green">getUser</span></div>
+        <div style="color: #94a3b8; margin-left: 20px;">└─ Tham số khớp : <span class="highlight-cyan">response.id</span> ➔ <span class="highlight-cyan">pathParams.id</span> | Độ tin cậy: <span class="highlight-green">HIGH (1.0)</span></div>
+
+        <div> <span class="tag-warn">[EDGE 2]</span> <span class="highlight-yellow">schemaViolation</span> ──▶ <span class="highlight-green">deleteUser</span></div>
+        <div style="color: #94a3b8; margin-left: 20px;">└─ Tham số khớp : <span class="highlight-cyan">response.id</span> ➔ <span class="highlight-cyan">pathParams.id</span> | Độ tin cậy: <span class="highlight-green">HIGH (1.0)</span></div>
+
+        <div> <span class="tag-warn">[EDGE 3]</span> <span class="highlight-yellow">schemaViolation</span> ──▶ <span class="highlight-green">updateUser</span></div>
+        <div style="color: #94a3b8; margin-left: 20px;">└─ Tham số khớp : <span class="highlight-cyan">response.id</span> ➔ <span class="highlight-cyan">pathParams.id</span> | Độ tin cậy: <span class="highlight-green">HIGH (1.0)</span></div>
+
+        <div> <span class="tag-warn">[EDGE 4]</span> <span class="highlight-yellow">createUser</span> ──▶ <span class="highlight-green">fixtureLogin</span></div>
+        <div style="color: #94a3b8; margin-left: 20px;">└─ Thuộc tính dùng chung : <span class="highlight-cyan">body.email</span> | Độ tin cậy: <span class="highlight-yellow">MEDIUM (0.75)</span></div>
+      </div>
+
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div class="sec-title">1.3 Thứ tự thực thi (Topological Sort — Kahn's Algorithm)</div>
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div style="margin: 2px 0 6px 0; font-size: 11.5px;">
+        <div><span class="tag-success">✔ Level 0</span> <span style="color: #94a3b8;">(In-degree = 0, chạy đồng thời - PARALLEL EXECUTION, 11 endpoints):</span></div>
+        <div style="margin-left: 20px; color: #a7f3d0;">
+          • fixtureLogin &nbsp;&nbsp;&nbsp; • createUser &nbsp;&nbsp;&nbsp; • validationError &nbsp;&nbsp;&nbsp; • unauthorized &nbsp;&nbsp;&nbsp; • serverError<br>
+          • schemaViolation • malformed &nbsp;&nbsp;&nbsp; • slow &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; • slowTimeout &nbsp;&nbsp;&nbsp;&nbsp; • parallelA &nbsp;&nbsp; • parallelB
+        </div>
+
+        <div style="margin-top: 4px;"><span class="tag-info">✔ Level 1</span> <span style="color: #94a3b8;">(In-degree &gt; 0, phụ thuộc dữ liệu ID từ Level 0, 3 endpoints):</span></div>
+        <div style="margin-left: 20px; color: #bae6fd;">
+          • getUser (tiêu thụ: pathParams.id) &nbsp;&nbsp;&nbsp; • deleteUser (tiêu thụ: pathParams.id) &nbsp;&nbsp;&nbsp; • updateUser (tiêu thụ: pathParams.id)
+        </div>
+      </div>
+
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div class="sec-title">1.4 Kiểm tra tính toàn vẹn chu trình (Cycle Detection Check)</div>
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div style="margin: 2px 0 6px 0; font-size: 11.5px;">
+        <div><span class="tag-success">[DAG CHECK]</span> Đã kiểm tra qua 14 đỉnh: <span class="highlight-green">Không có chu trình phụ thuộc (0 cycles found)</span></div>
+        <div><span class="tag-success">[STATUS]</span> <span class="highlight-green">Hợp lệ! Đồ thị đạt chuẩn Directed Acyclic Graph (DAG)</span></div>
+        <div><span class="tag-info">[METRICS]</span> Tổng thời gian phân tích: <span class="highlight-yellow">14.62 ms</span> | Bộ nhớ sử dụng: <span class="highlight-cyan">28.4 MB</span></div>
+      </div>
+
+      <div class="hr">────────────────────────────────────────────────────────────────────────────────</div>
+      <div style="margin-top: 8px; color: #10b981; font-weight: 600; font-size: 12px;">
+        ✔ [COMPLETED] Hoàn tất phân tích phụ thuộc. Chuyển sang giai đoạn Sinh dữ liệu kiểm thử (Test Data Generator)...
+      </div>
+      <div style="margin-top: 6px;">
+        <span class="prompt">kltn-tester@dev-server</span>:<span class="prompt-path">~/DoAn/backend</span>$ <span class="cursor"></span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

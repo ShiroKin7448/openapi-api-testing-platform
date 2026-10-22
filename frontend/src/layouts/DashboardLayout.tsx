@@ -36,7 +36,7 @@ export default function DashboardLayout() {
     onSuccess: (run) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectRuns(projectId) });
       void queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'analytics'] });
-      navigate(`/test-runs/${run.runId}`);
+      navigate(`/projects/${projectId}/runs/${run.runId}`);
     },
   });
 
@@ -58,7 +58,7 @@ export default function DashboardLayout() {
 
   const handleLogout = () => { logout(); useWorkspaceStore.getState().reset(); queryClient.clear(); navigate('/login', { replace: true }); };
   const navigateToRun = () => {
-    if (!projectId || !selectedEnvironment) return;
+    if (!projectId) return;
     createRun.mutate();
   };
   const activeProjectName = project.data?.name ?? projects.data?.find((item) => item.id === projectId)?.name ?? 'Project';
@@ -93,8 +93,17 @@ export default function DashboardLayout() {
           {!projectId && <p className="px-3 text-xs text-slate-500">Hãy chọn dự án để mở trang quản lý.</p>}
         </nav>
         <div className="p-3 mx-3 mb-3 rounded-xl bg-slate-50 dark:bg-dark-850 border border-slate-200 dark:border-white/[0.06]">
-          <div className="flex items-center text-xs font-semibold text-slate-700 dark:text-slate-300"><Server className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />Máy chủ và bộ nhớ đệm</div>
-          <div className="text-[11px] text-slate-500 mt-1">{createRun.isError ? apiErrorMessage(createRun.error, 'Không thể bắt đầu chạy kiểm thử.') : 'Đã kết nối máy chủ'}</div>
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <div className="flex items-center"><Server className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />Máy chủ và bộ nhớ đệm</div>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </div>
+          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">Đã kết nối máy chủ & RAM Fallback</div>
+          {createRun.isError && (
+            <div className="mt-1.5 p-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded text-[10px] text-rose-600 dark:text-rose-400 flex items-center justify-between">
+              <span className="truncate">{apiErrorMessage(createRun.error, 'Lỗi tạo lượt chạy')}</span>
+              <button onClick={() => createRun.reset()} className="text-slate-400 hover:text-slate-600 underline ml-1">Đóng</button>
+            </div>
+          )}
         </div>
         <div className="p-3 border-t border-slate-200 dark:border-white/[0.08] flex items-center justify-between bg-slate-50/50 dark:bg-dark-900/50">
           <div className="flex items-center space-x-2.5"><div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center font-bold text-xs text-white">{user?.name.slice(0, 2).toUpperCase() ?? 'QA'}</div><div><p className="text-xs font-semibold">{user?.name ?? 'User'}</p><p className="text-[10px] text-slate-400">{user?.email}</p></div></div>
@@ -109,7 +118,7 @@ export default function DashboardLayout() {
             <div className="hidden sm:flex items-center gap-2"><label htmlFor="environment-select" className="text-xs text-slate-500">Môi trường</label>
               {environments.isError ? <button className="text-xs text-rose-600" onClick={() => void environments.refetch()}>Thử tải lại môi trường</button> :
                 <select id="environment-select" aria-label="Môi trường" value={selectedEnvironment?.id ?? ''} onChange={(event) => setEnvironmentId(event.target.value)} disabled={!environments.data?.length} className="rounded-lg px-2 py-1.5 text-xs bg-slate-100 dark:bg-dark-850 border border-slate-200 dark:border-white/[0.08]">
-                  {!environments.data?.length && <option value="">{environments.isLoading ? 'Đang tải…' : 'Chưa có môi trường'}</option>}
+                  {!environments.data?.length && <option value="">{environments.isLoading ? 'Đang tải…' : 'Chưa có môi trường (Mặc định: Localhost)'}</option>}
                   {(environments.data ?? []).map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}
                 </select>}
               {projectId && <Link to={`/projects/${projectId}/settings`} aria-label="Quản lý dự án và môi trường" title="Quản lý dự án và môi trường" className="rounded-lg border border-slate-200 dark:border-white/[0.08] p-2 text-slate-500 hover:text-primary-600"><Settings2 className="h-4 w-4" /></Link>}
@@ -118,8 +127,8 @@ export default function DashboardLayout() {
               <button type="button" onClick={() => setTheme('light')} className={`px-2 py-1 rounded-lg text-xs ${theme === 'light' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}><Sun className="w-3.5 h-3.5" /></button>
               <button type="button" onClick={() => setTheme('dark')} className={`px-2 py-1 rounded-lg text-xs ${theme === 'dark' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500'}`}><Moon className="w-3.5 h-3.5" /></button>
             </div>
-            <button onClick={navigateToRun} disabled={!selectedEnvironment || createRun.isPending} className="btn-success py-2 px-4 text-xs font-bold flex items-center space-x-2 shadow-sm disabled:opacity-50" title="Tạo và bắt đầu lượt kiểm thử">
-              <Play className="w-3.5 h-3.5 fill-current" /><span>{createRun.isPending ? 'Starting…' : 'Chạy kiểm thử'}</span>
+            <button onClick={navigateToRun} disabled={createRun.isPending} className="btn-success py-2 px-4 text-xs font-bold flex items-center space-x-2 shadow-sm disabled:opacity-50" title="Tạo và bắt đầu lượt kiểm thử">
+              <Play className="w-3.5 h-3.5 fill-current" /><span>{createRun.isPending ? 'Đang khởi chạy…' : 'Chạy kiểm thử'}</span>
             </button>
           </div>
         </header>

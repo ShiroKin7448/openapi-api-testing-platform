@@ -46,6 +46,7 @@ export const queryKeys = {
   environments: (projectId: string) => ['projects', projectId, 'environments'] as const,
   specs: (projectId: string) => ['projects', projectId, 'specs'] as const,
   endpoints: (specId: string) => ['specs', specId, 'endpoints'] as const,
+  specFlow: (specId: string) => ['specs', specId, 'flow'] as const,
   projectCases: (projectId: string) => ['projects', projectId, 'test-cases'] as const,
   endpointCases: (endpointId: string) => ['endpoints', endpointId, 'test-cases'] as const,
   projectRuns: (projectId: string) => ['projects', projectId, 'test-runs'] as const,

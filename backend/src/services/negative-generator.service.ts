@@ -65,7 +65,7 @@ export class NegativeGeneratorService {
           });
         }
 
-        // 4. Boundary Violation (e.g. strings that are too long, or numbers that are too big)
+        // 4. Boundary Violation (e.g. strings that are too long/short, or numbers that are out of bounds)
         if (propSchema.type === 'string' && typeof propSchema.maxLength === 'number' && propSchema.maxLength > 0) {
           mutations.push({
             type: MutationType.BOUNDARY,
@@ -74,6 +74,52 @@ export class NegativeGeneratorService {
             mutatedValue: 'x'.repeat(Math.min(propSchema.maxLength + 1, 10000)),
             expectedFailure: '400 Bad Request'
           });
+        }
+        if (propSchema.type === 'string' && typeof propSchema.minLength === 'number' && propSchema.minLength > 0) {
+          mutations.push({
+            type: MutationType.BOUNDARY,
+            targetPath: path,
+            originalValue,
+            mutatedValue: '',
+            expectedFailure: '400 Bad Request'
+          });
+        }
+        if ((propSchema.type === 'integer' || propSchema.type === 'number') && typeof propSchema.minimum === 'number') {
+          mutations.push({
+            type: MutationType.BOUNDARY,
+            targetPath: path,
+            originalValue,
+            mutatedValue: propSchema.minimum - 1,
+            expectedFailure: '400 Bad Request'
+          });
+        }
+        if ((propSchema.type === 'integer' || propSchema.type === 'number') && typeof propSchema.maximum === 'number') {
+          mutations.push({
+            type: MutationType.BOUNDARY,
+            targetPath: path,
+            originalValue,
+            mutatedValue: propSchema.maximum + 1,
+            expectedFailure: '400 Bad Request'
+          });
+        }
+
+        // 5. Format Violation (e.g. email, uuid, uri)
+        if (propSchema.type === 'string' && typeof propSchema.format === 'string') {
+          let badFormatVal: string | undefined;
+          if (propSchema.format === 'email') badFormatVal = 'invalid-email-address';
+          else if (propSchema.format === 'uuid') badFormatVal = 'not-a-valid-uuid-123';
+          else if (propSchema.format === 'uri' || propSchema.format === 'url') badFormatVal = 'not-a-valid-url';
+          else if (propSchema.format === 'date' || propSchema.format === 'date-time') badFormatVal = 'invalid-date-format';
+
+          if (badFormatVal !== undefined) {
+            mutations.push({
+              type: MutationType.FORMAT_VIOLATION,
+              targetPath: path,
+              originalValue,
+              mutatedValue: badFormatVal,
+              expectedFailure: '400 Bad Request'
+            });
+          }
         }
       }
     }

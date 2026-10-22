@@ -1,25 +1,65 @@
-import { NormalizedEndpoint } from '@shared/types';
+import { NormalizedEndpoint, RiskFactor } from '@shared/types';
+
+export interface RiskAnalysisResult {
+  score: number;
+  level: 'HIGH' | 'MEDIUM' | 'LOW';
+  factors: RiskFactor[];
+}
 
 export class RiskAnalyzerService {
   /**
    * Calculates a heuristic risk score (0-100) for a given endpoint.
    */
   public analyzeRisk(endpoint: NormalizedEndpoint, requiresAuth: boolean): number {
+    return this.analyzeRiskWithDetails(endpoint, requiresAuth).score;
+  }
+
+  /**
+   * Calculates a heuristic risk score along with full factor breakdown and severity level.
+   */
+  public analyzeRiskWithDetails(endpoint: NormalizedEndpoint, requiresAuth: boolean): RiskAnalysisResult {
     let score = 0;
+    const factors: RiskFactor[] = [];
 
     // 1. Method Heuristics
     const method = endpoint.method.toLowerCase();
     if (method === 'post' || method === 'put' || method === 'patch') {
       score += 20;
+      factors.push({
+        factor: 'HTTP Method (Mutation)',
+        points: 20,
+        description: `Phương thức ${method.toUpperCase()} làm biến đổi/tạo mới trạng thái dữ liệu trên hệ thống.`,
+      });
     } else if (method === 'delete') {
       score += 40;
-    } // GET adds 0
+      factors.push({
+        factor: 'HTTP Method (Destructive)',
+        points: 40,
+        description: 'Phương thức DELETE có tính phá huỷ cao, xoá dữ liệu vĩnh viễn.',
+      });
+    } else {
+      factors.push({
+        factor: 'HTTP Method (Safe/Read-only)',
+        points: 0,
+        description: `Phương thức ${method.toUpperCase()} chỉ đọc dữ liệu an toàn.`,
+      });
+    }
 
     // 2. Auth Heuristics
     if (!requiresAuth) {
       score += 30; // Unauthenticated endpoints are inherently riskier for testing
+      factors.push({
+        factor: 'Authentication (Public / Unprotected)',
+        points: 30,
+        description: 'Endpoint công khai không có bảo vệ xác thực, nguy cơ bị khai thác và spam cao.',
+      });
     } else {
       score += 10;
+      factors.push({
+        factor: 'Authentication (Protected)',
+        points: 10,
+        description: 'Endpoint yêu cầu token/phiên xác thực người dùng.',
+      });
     }
 
     // 3. PII / Sensitive Data Heuristics (Check requests and responses)
@@ -60,14 +100,31 @@ export class RiskAnalyzerService {
 
     if (hasPII) {
       score += 30;
+      factors.push({
+        factor: 'Sensitive Data (PII / Credentials)',
+        points: 30,
+        description: 'Phát hiện trường dữ liệu nhạy cảm (email, password, token, card...) trong schema/tham số.',
+      });
     }
 
     // 4. Depth Heuristics (Complex schemas increase testing surface area)
     if (maxDepth > 3) {
       score += 10;
+      factors.push({
+        factor: 'Schema Complexity (Deeply Nested)',
+        points: 10,
+        description: `Cấu trúc schema phân tầng sâu (${maxDepth} cấp lồng nhau), tăng bề mặt lỗi và chi phí sinh dữ liệu.`,
+      });
     }
 
-    return Math.min(score, 100);
+    const finalScore = Math.min(score, 100);
+    const level: 'HIGH' | 'MEDIUM' | 'LOW' = finalScore >= 70 ? 'HIGH' : finalScore >= 40 ? 'MEDIUM' : 'LOW';
+
+    return {
+      score: finalScore,
+      level,
+      factors,
+    };
   }
 
   private analyzeSchemaDepthAndPII(
