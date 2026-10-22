@@ -63,13 +63,10 @@ export class WorkerService {
       if (value === undefined || value === null || typeof value === 'object') return '1';
       return encodeURIComponent(String(value));
     });
-    let base: URL;
-    try {
-      base = new URL(baseUrl);
-    } catch {
-      base = new URL('http://localhost:3000');
-    }
-    const requestUrl = new URL(path.replace(/^\/+/, ''), `${base.origin}${base.pathname.replace(/\/+$/, '')}/`);
+    const base = new URL(baseUrl);
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) throw new Error('Environment BASE_URL must be an HTTP(S) URL without credentials, query parameters, or fragments');
+    const requestUrl = new URL(path, `${base.origin}${base.pathname.replace(/\/+$/, '')}/`);
+    if (requestUrl.origin !== base.origin) throw new Error('OpenAPI endpoint path cannot change the environment host');
     for (const [key, value] of Object.entries(jsonRecord(testJob.queryParams))) {
       if (value !== undefined && value !== null && typeof value !== 'object') requestUrl.searchParams.set(key, String(value));
     }
@@ -126,20 +123,16 @@ export class WorkerService {
       responseData = axiosResponse.data as unknown;
       responseHeaders = axiosResponse.headers as unknown as Record<string, string>;
     } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          responseStatus = error.response.status;
-          responseData = error.response.data;
-          responseHeaders = error.response.headers as unknown as Record<string, string>;
-        } else {
-          // Gracefully capture unreachable host as status 0 result instead of breaking the entire test run
-          responseStatus = 0;
-          responseData = { error: `Network unreachable: ${error.message}` };
-          responseHeaders = {};
-        }
+      if (!axios.isAxiosError(error) && jsonRecord(error).isAxiosError !== true) throw error;
+      const axiosError = error as AxiosError<unknown>;
+      if (axiosError.response) {
+        responseStatus = axiosError.response.status;
+        responseData = axiosError.response.data;
+        responseHeaders = axiosError.response.headers as unknown as Record<string, string>;
+      } else if (axiosError.request) {
+        throw new Error(`Transient network failure: ${axiosError.message}`);
       } else {
-        responseStatus = 500;
-        responseData = { error: error instanceof Error ? error.message : 'Unknown execution error' };
+        throw new Error(`Request setup failure: ${axiosError.message}`);
       }
     }
 
