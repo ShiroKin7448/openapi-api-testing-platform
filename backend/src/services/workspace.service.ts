@@ -2,6 +2,7 @@ import prisma from '../utils/prisma';
 import { WorkspaceRole as PrismaWorkspaceRole, MemberStatus as PrismaMemberStatus } from '@prisma/client';
 import { AppError } from '../utils/AppError';
 import { Workspace, WorkspaceMember, WorkspaceRole, MemberStatus } from '@shared/types';
+import { auditLogService } from './audit-log.service';
 
 // ─── Role ordering for privilege escalation guard ────────────────────────────
 const ROLE_HIERARCHY: Record<WorkspaceRole, number> = {
@@ -246,7 +247,45 @@ export class WorkspaceService {
       include: { user: { select: { id: true, name: true, email: true } } },
     });
 
+    await auditLogService.record(workspaceId, requesterId, 'MEMBER_ROLE_CHANGED', 'WorkspaceMember', memberId, { from: targetCurrentRole, to: newRole });
     return updated as unknown as WorkspaceMember;
+  }
+
+  /**
+   * Transfer workspace ownership to another active member. Only the current
+   * OWNER may call this. The requester is demoted to ADMIN so the workspace
+   * always keeps exactly the same number of Owners it had before the call.
+   */
+  async transferOwnership(
+    requesterId: string,
+    workspaceId: string,
+    targetUserId: string
+  ): Promise<WorkspaceMember> {
+    await this.requireRole(requesterId, workspaceId, [WorkspaceRole.OWNER]);
+
+    if (targetUserId === requesterId) {
+      throw new AppError('You are already the Owner of this workspace', 400);
+    }
+
+    const target = await prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
+    });
+    if (!target) throw new AppError('Target user is not a member of this workspace', 404);
+
+    const [, updatedTarget] = await prisma.$transaction([
+      prisma.workspaceMember.update({
+        where: { userId_workspaceId: { userId: requesterId, workspaceId } },
+        data: { role: 'ADMIN' as PrismaWorkspaceRole },
+      }),
+      prisma.workspaceMember.update({
+        where: { id: target.id },
+        data: { role: 'OWNER' as PrismaWorkspaceRole },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      }),
+    ]);
+
+    await auditLogService.record(workspaceId, requesterId, 'OWNERSHIP_TRANSFERRED', 'WorkspaceMember', target.id, { newOwnerUserId: targetUserId });
+    return updatedTarget as unknown as WorkspaceMember;
   }
 
   /**
@@ -296,6 +335,7 @@ export class WorkspaceService {
     }
 
     await prisma.workspaceMember.delete({ where: { id: memberId } });
+    await auditLogService.record(workspaceId, requesterId, 'MEMBER_REMOVED', 'WorkspaceMember', memberId, { removedUserId: target.userId, role: targetRole });
   }
 
   /**

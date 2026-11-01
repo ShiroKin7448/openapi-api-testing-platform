@@ -12,6 +12,7 @@ import { queueEventsService } from '../services/queue-events.service';
 import { WorkerService } from '../services/worker.service';
 import { TestCaseService } from '../services/test-case.service';
 import { MetricsService } from '../services/metrics.service';
+import { auditLogService } from '../services/audit-log.service';
 
 interface RunCase {
   id: string; endpointId: string; name: string; description: string | null;
@@ -55,7 +56,7 @@ function collectContextSources(values: unknown[]): string[] {
   return sources;
 }
 
-async function authorize(userId: string, projectId: string): Promise<void> {
+async function authorize(userId: string, projectId: string): Promise<string> {
   const project = await db.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
   if (!project) throw new AppError('Project not found', 404, true, 'PROJECT_NOT_FOUND');
   // OWNER, ADMIN, TESTER, DEVELOPER can create/view runs; VIEWER read-only (handled by separate read authorize)
@@ -65,6 +66,7 @@ async function authorize(userId: string, projectId: string): Promise<void> {
     WorkspaceRole.TESTER,
     WorkspaceRole.DEVELOPER,
   ]);
+  return project.workspaceId;
 }
 
 function runSummary(run: RunRecord, completed: number, passed: number, failed: number) {
@@ -86,8 +88,8 @@ export const executeRun = async (
   let createdRunId: string | undefined;
   let failureAlreadyPersisted = false;
   try {
-    await authorize(userId, projectId);
-    
+    const workspaceId = await authorize(userId, projectId);
+
     // Auto-resolve or create environment if not provided or not found
     let envId = environmentId;
     let environment = envId ? await db.environment.findFirst({ where: { id: envId, projectId }, select: { id: true } }) : null;
@@ -206,6 +208,7 @@ export const executeRun = async (
 
     void executeRunInProcess(run.id, cases as unknown as TestCase[], executablePlan);
 
+    await auditLogService.record(workspaceId, userId, 'TEST_RUN_STARTED', 'TestRun', run.id, { projectId, triggerType, totalTests: cases.length });
     return { runId: run.id, status: 'RUNNING', totalTests: cases.length };
   } catch (error) {
     if (createdRunId && !failureAlreadyPersisted) {

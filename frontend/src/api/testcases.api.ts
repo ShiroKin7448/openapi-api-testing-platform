@@ -28,4 +28,5 @@ export const testcasesApi = {
     (await apiClient.patch<ApiEnvelope<TestCaseDto>>(`/test-cases/${testCaseId}`, input)).data.data,
   bulkStatus: async (ids: string[], status: string): Promise<void> => { await apiClient.patch(`/test-cases/bulk/status`, { ids, status }); },
   delete: async (testCaseId: string): Promise<void> => { await apiClient.delete(`/test-cases/${testCaseId}`); },
+  clone: async (testCaseId: string): Promise<TestCaseDto> => (await apiClient.post<ApiEnvelope<TestCaseDto>>(`/test-cases/${testCaseId}/clone`, {})).data.data,
 };

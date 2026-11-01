@@ -2,7 +2,7 @@ import { FormEvent, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Users, UserPlus, Shield, Trash2, ChevronDown, Crown, Eye, Code2, FlaskConical, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, Shield, Trash2, ChevronDown, Crown, Eye, Code2, FlaskConical, ShieldCheck, AlertTriangle, ArrowRightLeft } from 'lucide-react';
 import { workspacesApi } from '../api/workspaces.api';
 import { queryKeys } from '../api/queryClient';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
@@ -187,6 +187,16 @@ export default function WorkspaceMembers() {
     onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Failed to remove member.')),
   });
 
+  const transferMutation = useMutation({
+    mutationFn: (userId: string) => workspacesApi.transferOwnership(workspaceId, userId),
+    onSuccess: () => {
+      toast.success('Ownership transferred. You are now an Admin.');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+    },
+    onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Failed to transfer ownership.')),
+  });
+
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleInvite = (e: FormEvent) => {
     e.preventDefault();
@@ -206,6 +216,13 @@ export default function WorkspaceMembers() {
   const handleRemove = (member: WorkspaceMember) => {
     if (!confirm(`Remove ${member.user?.name ?? 'this member'} from the workspace?`)) return;
     removeMutation.mutate(member.id);
+  };
+
+  const handleTransferOwnership = (member: WorkspaceMember) => {
+    const name = member.user?.name ?? member.invitedEmail ?? 'this member';
+    const confirmed = window.prompt(`Type "${name}" to confirm transferring ownership to them. You will become an Admin.`);
+    if (confirmed !== name) return;
+    transferMutation.mutate(member.userId);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -426,17 +443,30 @@ export default function WorkspaceMembers() {
                       {/* Actions */}
                       {canManage && (
                         <td className="px-5 py-3 text-right">
-                          {allowRemove && (
-                            <button
-                              id={`remove-member-${member.id}`}
-                              onClick={() => handleRemove(member)}
-                              disabled={removeMutation.isPending}
-                              title="Remove member"
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors disabled:opacity-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
+                          <div className="inline-flex items-center gap-1">
+                            {myRole === 'OWNER' && !isMe && member.status === 'ACTIVE' && (
+                              <button
+                                id={`transfer-ownership-${member.id}`}
+                                onClick={() => handleTransferOwnership(member)}
+                                disabled={transferMutation.isPending}
+                                title="Transfer ownership to this member"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50"
+                              >
+                                <ArrowRightLeft className="w-4 h-4" />
+                              </button>
+                            )}
+                            {allowRemove && (
+                              <button
+                                id={`remove-member-${member.id}`}
+                                onClick={() => handleRemove(member)}
+                                disabled={removeMutation.isPending}
+                                title="Remove member"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors disabled:opacity-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>

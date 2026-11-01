@@ -13,5 +13,6 @@ router.get('/projects/:projectId/test-cases', requireAuth, validateRequest({ par
 router.get('/test-cases/:testCaseId', requireAuth, validateRequest({ params: testCaseIdParams, query: noQueryParams }), controller.getTestCase);
 router.patch('/test-cases/bulk/status', requireAuth, validateRequest({ body: testCaseBulkStatusBody, query: noQueryParams }), controller.bulkUpdateStatus);
 router.patch('/test-cases/:testCaseId', requireAuth, validateRequest({ params: testCaseIdParams, body: testCasePatchBody, query: noQueryParams }), controller.updateTestCase);
+router.post('/test-cases/:testCaseId/clone', requireAuth, validateRequest({ params: testCaseIdParams, body: z.any(), query: noQueryParams }), controller.cloneTestCase);
 router.delete('/test-cases/:testCaseId', requireAuth, validateRequest({ params: testCaseIdParams, query: noQueryParams }), controller.deleteTestCase);
 export default router;

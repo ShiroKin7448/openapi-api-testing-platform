@@ -1,5 +1,5 @@
 import { Outlet, NavLink, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Beaker, Activity, LogOut, Sparkles, Play, Server, Layers, Sun, Moon, Settings2, Users, FolderKanban, Shield } from 'lucide-react';
+import { LayoutDashboard, Beaker, Activity, LogOut, Sparkles, Play, Server, Layers, Sun, Moon, Settings2, Users, FolderKanban, Shield, Clock, History } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../api/queryClient';
@@ -26,6 +26,9 @@ export default function DashboardLayout() {
 
   const workspaces = useQuery({ queryKey: queryKeys.workspaces, queryFn: workspacesApi.list });
   const workspaceId = activeWorkspaceId ?? workspaces.data?.[0]?.id ?? '';
+  const currentWorkspaceRole = workspaces.data?.find((workspace) => workspace.id === workspaceId)?.role;
+  const isViewer = currentWorkspaceRole === 'VIEWER';
+  const canViewAuditLog = currentWorkspaceRole === 'OWNER' || currentWorkspaceRole === 'ADMIN';
   const projects = useQuery({ queryKey: queryKeys.projects(workspaceId), queryFn: () => projectsApi.list(workspaceId), enabled: Boolean(workspaceId) });
   const project = useQuery({ queryKey: queryKeys.project(projectId), queryFn: () => projectsApi.get(projectId), enabled: Boolean(projectId) });
   const environments = useQuery({ queryKey: queryKeys.environments(projectId), queryFn: () => environmentsApi.list(projectId), enabled: Boolean(projectId) });
@@ -87,8 +90,10 @@ export default function DashboardLayout() {
           <NavLink to="/projects" className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm ${isActive ? 'bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}><FolderKanban className="h-4 w-4" /> Không gian làm việc và dự án</NavLink>
           <NavLink to="/settings" className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm ${isActive ? 'bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}><Users className="h-4 w-4" /> Cài đặt tài khoản</NavLink>
           <NavLink to={workspaceId ? `/workspaces/${workspaceId}/members` : '/workspace/members'} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm ${isActive ? 'bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}><Shield className="h-4 w-4" /> Workspace Members</NavLink>
+          {canViewAuditLog && <NavLink to={workspaceId ? `/workspaces/${workspaceId}/audit-log` : '/workspace/audit-log'} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm ${isActive ? 'bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}><History className="h-4 w-4" /> Nhật ký hoạt động</NavLink>}
           <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Quy trình kiểm thử 4 bước</div>
           {projectId && navItems.map((item) => { const Icon = item.icon; return <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `group flex items-start px-3.5 py-3 rounded-xl transition-all ${isActive ? 'bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-500/30 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}><Icon className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0 text-slate-400" /><div><div className="text-sm font-medium leading-none mb-1">{item.label}</div><div className="text-[11px] text-slate-400">{item.desc}</div></div></NavLink>; })}
+          {projectId && <NavLink to={`/projects/${projectId}/schedules`} className={({ isActive }) => `group flex items-center px-3.5 py-3 rounded-xl ${isActive ? 'bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-500/30 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}><Clock className="w-5 h-5 mr-3 flex-shrink-0 text-slate-400" /><span className="text-sm font-medium">Lịch chạy định kỳ</span></NavLink>}
           {projectId && <NavLink to={`/projects/${projectId}/settings`} className={({ isActive }) => `group flex items-center px-3.5 py-3 rounded-xl ${isActive ? 'bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-500/30 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}><Settings2 className="w-5 h-5 mr-3 flex-shrink-0 text-slate-400" /><span className="text-sm font-medium">Dự án và môi trường</span></NavLink>}
           {!projectId && <p className="px-3 text-xs text-slate-500">Hãy chọn dự án để mở trang quản lý.</p>}
         </nav>
@@ -127,9 +132,9 @@ export default function DashboardLayout() {
               <button type="button" onClick={() => setTheme('light')} className={`px-2 py-1 rounded-lg text-xs ${theme === 'light' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}><Sun className="w-3.5 h-3.5" /></button>
               <button type="button" onClick={() => setTheme('dark')} className={`px-2 py-1 rounded-lg text-xs ${theme === 'dark' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500'}`}><Moon className="w-3.5 h-3.5" /></button>
             </div>
-            <button onClick={navigateToRun} disabled={createRun.isPending} className="btn-success py-2 px-4 text-xs font-bold flex items-center space-x-2 shadow-sm disabled:opacity-50" title="Tạo và bắt đầu lượt kiểm thử">
+            {!isViewer && <button onClick={navigateToRun} disabled={createRun.isPending} className="btn-success py-2 px-4 text-xs font-bold flex items-center space-x-2 shadow-sm disabled:opacity-50" title="Tạo và bắt đầu lượt kiểm thử">
               <Play className="w-3.5 h-3.5 fill-current" /><span>{createRun.isPending ? 'Đang khởi chạy…' : 'Chạy kiểm thử'}</span>
-            </button>
+            </button>}
           </div>
         </header>
         {location.pathname === '/' && <div className="px-6 py-2 text-xs text-slate-500">Đang mở dự án đầu tiên…</div>}

@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { requireAuth } from '../middlewares/requireAuth';
 import { validateRequest } from '../middlewares/validateRequest';
 import {
+  auditLogQuery,
   noQueryParams,
+  transferOwnershipBody,
   workspaceBody,
   workspaceMemberBody,
   workspaceMemberIdParams,
@@ -20,7 +22,9 @@ import {
   addMember,
   updateMember,
   removeMember,
+  transferOwnership,
 } from '../controllers/workspace.controller';
+import { listAuditLog } from '../controllers/audit-log.controller';
 
 const router = Router();
 
@@ -36,5 +40,7 @@ router.get('/:workspaceId/members', requireAuth, validateRequest({ params: works
 router.post('/:workspaceId/members', requireAuth, validateRequest({ params: workspaceParams, body: workspaceMemberBody, query: noQueryParams }), addMember);
 router.patch('/:workspaceId/members/:memberId', requireAuth, validateRequest({ params: workspaceMemberParams, body: workspaceMemberUpdateBody, query: noQueryParams }), updateMember);
 router.delete('/:workspaceId/members/:memberId', requireAuth, validateRequest({ params: workspaceMemberIdParams, query: noQueryParams }), removeMember);
+router.post('/:workspaceId/transfer-ownership', requireAuth, validateRequest({ params: workspaceParams, body: transferOwnershipBody, query: noQueryParams }), transferOwnership);
+router.get('/:workspaceId/audit-log', requireAuth, validateRequest({ params: workspaceParams, query: auditLogQuery }), listAuditLog);
 
 export default router;

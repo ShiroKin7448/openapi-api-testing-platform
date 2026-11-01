@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
-import { AlertTriangle, Code, ShieldCheck, Activity, Flame } from 'lucide-react';
+import { AlertTriangle, Code, ShieldCheck, Activity, Flame, Download } from 'lucide-react';
 import { analyticsApi } from '../api/analytics.api';
 import { testrunsApi } from '../api/testruns.api';
 import { queryKeys } from '../api/queryClient';
@@ -10,6 +10,24 @@ import { apiErrorMessage } from '../api/errors';
 import { useThemeStore } from '../store/useThemeStore';
 
 const COLORS = { success: '#10b981', error: '#f43f5e', primary: '#6366f1', cyan: '#06b6d4', amber: '#f59e0b' };
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function downloadCsv(filename: string, rows: Array<Array<string | number>>): void {
+  const csv = rows.map((row) => row.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 export default function AnalyticsDashboard() {
   const { projectId = '' } = useParams();
@@ -46,9 +64,36 @@ export default function AnalyticsDashboard() {
   ] : [];
   const noRuns = data?.summary.totalRuns === 0;
 
+  const exportCsv = () => {
+    if (!data || !summary) return;
+    const rows: Array<Array<string | number>> = [
+      ['Metric', 'Value'],
+      ['Total runs in history', summary.totalRuns],
+      ['Total tests', summary.totalTests],
+      ['Passed', summary.passed],
+      ['Failed', summary.failed],
+      ['Pass rate (%)', summary.passRate.toFixed(1)],
+      ['Endpoint coverage (%)', data.coverage.endpoint.toFixed(1)],
+      ['Contract validation coverage (%)', data.coverage.contractValidation.toFixed(1)],
+      ['Valid test coverage (%)', data.coverage.valid.toFixed(1)],
+      ['Boundary test coverage (%)', data.coverage.boundary.toFixed(1)],
+      ['Negative test coverage (%)', data.coverage.negative.toFixed(1)],
+      ['Median response time (ms)', data.performance.median],
+      ['P95 response time (ms)', data.performance.p95],
+      ['Performance regression', data.performance.regression ? 'Yes' : 'No'],
+      [],
+      ['Latest run failures', ''],
+      ['Method', 'Path', 'Name', 'Type', 'Status', 'HTTP status'],
+      ...(runAnalytics.data?.failedResults.map((failure) => [
+        failure.endpoint.method, failure.endpoint.path, failure.name, failure.type, failure.status, failure.responseStatus ?? '',
+      ]) ?? []),
+    ];
+    downloadCsv(`project-${projectId}-analytics-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white">Bước 4: Báo cáo Chất lượng & Phân tích</h1><p className="text-xs text-slate-500 mt-1">Analytics are calculated from this project’s persisted test runs and results.</p></div><div className="flex flex-wrap items-center gap-2"><select aria-label="Run history window" value={lastRuns} onChange={(event) => setLastRuns(Number(event.target.value) === 30 ? 30 : 10)} className="rounded-lg px-2 py-1.5 text-xs bg-slate-100 dark:bg-dark-900 border border-slate-200"><option value={10}>Last 10 runs</option><option value={30}>Last 30 runs</option></select><input aria-label="From date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="rounded-lg px-2 py-1.5 text-xs bg-slate-100 dark:bg-dark-900 border border-slate-200" /><input aria-label="To date" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="rounded-lg px-2 py-1.5 text-xs bg-slate-100 dark:bg-dark-900 border border-slate-200" /></div></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white">Bước 4: Báo cáo Chất lượng & Phân tích</h1><p className="text-xs text-slate-500 mt-1">Analytics are calculated from this project’s persisted test runs and results.</p></div><div className="flex flex-wrap items-center gap-2"><select aria-label="Run history window" value={lastRuns} onChange={(event) => setLastRuns(Number(event.target.value) === 30 ? 30 : 10)} className="rounded-lg px-2 py-1.5 text-xs bg-slate-100 dark:bg-dark-900 border border-slate-200"><option value={10}>Last 10 runs</option><option value={30}>Last 30 runs</option></select><input aria-label="From date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="rounded-lg px-2 py-1.5 text-xs bg-slate-100 dark:bg-dark-900 border border-slate-200" /><input aria-label="To date" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="rounded-lg px-2 py-1.5 text-xs bg-slate-100 dark:bg-dark-900 border border-slate-200" /><button onClick={exportCsv} disabled={!data || noRuns} title="Xuất báo cáo CSV (mở được bằng Excel)" className="btn-secondary py-2 px-3 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"><Download className="w-3.5 h-3.5" />Xuất CSV</button></div></div>
       {analytics.isLoading && <div className="glass-panel p-8 text-center text-sm text-slate-500">Loading analytics…</div>}
       {analytics.isError && <div role="alert" className="glass-panel p-5 text-sm text-rose-600">{apiErrorMessage(analytics.error, 'Could not load analytics.')} <button onClick={() => void analytics.refetch()} className="underline ml-2">Retry</button></div>}
       {runs.isError && <div role="alert" className="glass-panel p-5 text-sm text-rose-600">{apiErrorMessage(runs.error, 'Could not load run history.')} <button onClick={() => void runs.refetch()} className="underline ml-2">Retry</button></div>}

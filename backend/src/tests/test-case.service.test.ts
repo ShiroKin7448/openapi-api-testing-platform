@@ -15,6 +15,7 @@ jest.mock('../utils/prisma', () => ({
   },
 }));
 
+
 describe('TestCaseService', () => {
   let service: TestCaseService;
 
@@ -168,6 +169,36 @@ describe('TestCaseService', () => {
         responses: [{ statusCode: '201' }],
       };
       await expect(service.generateForEndpoint('ep-upload', endpoint)).rejects.toMatchObject({ code: 'UNSUPPORTED_REQUEST_BODY' });
+      expect(prisma.testCase.create).not.toHaveBeenCalled();
+    });
+
+    it('clones an existing test case as a new READY, enabled VALID/NEGATIVE record with the same payload', async () => {
+      const source = {
+        id: 'tc-src', endpointId: 'ep-1', name: 'Valid: POST /users', description: 'Generated valid request',
+        type: 'VALID', enabled: true, status: 'READY',
+        requestBody: { email: 'a@test.com' }, pathParams: {}, queryParams: {}, headers: { 'Content-Type': 'application/json' },
+        expectedResponse: { statusCode: '201' }, mutation: null, originalPayload: { requestBody: { email: 'a@test.com' } },
+        version: 1, modifiedBy: null, modifiedAt: null, createdAt: new Date(), updatedAt: new Date(),
+      };
+      (prisma.testCase.findUnique as jest.Mock).mockResolvedValue(source);
+      (prisma.testCase.create as jest.Mock).mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+        id: 'tc-clone', createdAt: new Date(), updatedAt: new Date(), ...args.data,
+      }));
+
+      const cloned = await service.clone('tc-src', 'user-1');
+
+      expect(prisma.testCase.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+        endpointId: 'ep-1', name: 'Valid: POST /users (Copy)', type: 'VALID', enabled: true, status: 'READY',
+        requestBody: { email: 'a@test.com' }, modifiedBy: 'user-1',
+      }) });
+      expect(cloned.id).toBe('tc-clone');
+      expect(cloned.name).toBe('Valid: POST /users (Copy)');
+      expect(cloned.payload).toEqual({ email: 'a@test.com' });
+    });
+
+    it('rejects cloning a test case that does not exist', async () => {
+      (prisma.testCase.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(service.clone('missing-id')).rejects.toMatchObject({ code: 'TEST_CASE_NOT_FOUND' });
       expect(prisma.testCase.create).not.toHaveBeenCalled();
     });
 

@@ -33,6 +33,7 @@ export const workspaceMemberBody = z.object({
   { message: 'Either email or userId is required' }
 );
 export const workspaceMemberUpdateBody = z.object({ role: z.enum(['OWNER', 'ADMIN', 'TESTER', 'DEVELOPER', 'VIEWER']) }).strict();
+export const transferOwnershipBody = z.object({ userId: idSchema }).strict();
 export const workspaceMemberParams = workspaceParams.extend({ memberId: idSchema });
 export const workspaceMemberIdParams = workspaceParams.extend({ memberId: idSchema });
 export const projectParams = z.object({ projectId: idSchema });
@@ -69,6 +70,9 @@ export const testCaseBulkStatusBody = z.object({
   status: z.enum(['DRAFT', 'READY', 'DISABLED', 'ARCHIVED']),
 }).strict();
 export const createTestRunBody = z.object({ environmentId: idSchema.optional().or(z.literal('')), testCaseIds: z.array(idSchema).min(1).optional() }).strict();
+export const createApiTokenBody = z.object({ name: z.string().trim().min(1).max(100) }).strict();
+export const apiTokenParams = z.object({ projectId: idSchema, tokenId: idSchema });
+export const triggerCiRunBody = z.object({ environmentId: idSchema.optional().or(z.literal('')), testCaseIds: z.array(idSchema).min(1).optional() }).strict();
 export const testRunParams = z.object({ testRunId: idSchema });
 export const testRunResultsQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -76,6 +80,10 @@ export const testRunResultsQuery = z.object({
   status: z.enum(['PENDING', 'PASSED', 'FAILED', 'ERROR']).optional(),
   endpointId: idSchema.optional(),
   type: z.enum(['VALID', 'BOUNDARY', 'NEGATIVE']).optional(),
+}).strict();
+export const auditLogQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
 }).strict();
 export const analyticsQuery = z.object({
   lastRuns: z.coerce.number().int().refine((value): value is 10 | 30 => value === 10 || value === 30).default(10),

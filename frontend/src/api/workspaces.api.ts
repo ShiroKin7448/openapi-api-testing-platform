@@ -39,4 +39,8 @@ export const workspacesApi = {
   removeMember: async (workspaceId: string, memberId: string): Promise<void> => {
     await apiClient.delete(`/workspaces/${workspaceId}/members/${memberId}`);
   },
+
+  /** Transfer ownership to another active member (OWNER only); the caller is demoted to ADMIN */
+  transferOwnership: async (workspaceId: string, userId: string): Promise<WorkspaceMember> =>
+    (await apiClient.post<ApiEnvelope<WorkspaceMember>>(`/workspaces/${workspaceId}/transfer-ownership`, { userId })).data.data,
 };

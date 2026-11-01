@@ -7,9 +7,11 @@ import ProjectOverview from './pages/ProjectOverview';
 import TestBuilder from './pages/TestBuilder';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import TestRunExecution from './pages/TestRunExecution';
+import TestSchedules from './pages/TestSchedules';
 import ProjectSettings from './pages/ProjectSettings';
 import UserSettings from './pages/UserSettings';
 import WorkspaceMembers from './pages/WorkspaceMembers';
+import AuditLog from './pages/AuditLog';
 import Login from './pages/Login';
 import { authApi } from './api/auth.api';
 import { projectsApi } from './api/projects.api';
@@ -151,11 +153,14 @@ export default function App() {
           <Route path="projects/:projectId" element={<ProjectOverview />} />
           <Route path="projects/:projectId/settings" element={<ProjectSettings />} />
           <Route path="projects/:projectId/tests" element={<TestBuilder />} />
+          <Route path="projects/:projectId/schedules" element={<TestSchedules />} />
           <Route path="projects/:projectId/analytics" element={<AnalyticsDashboard />} />
           <Route path="projects/:projectId/runs/:runId" element={<TestRunExecution />} />
           <Route path="test-runs/:runId" element={<TestRunExecution />} />
           <Route path="workspaces/:workspaceId/members" element={<WorkspaceMembers />} />
           <Route path="workspace/members" element={<WorkspaceMembers />} />
+          <Route path="workspaces/:workspaceId/audit-log" element={<AuditLog />} />
+          <Route path="workspace/audit-log" element={<AuditLog />} />
         </Route>
       </Routes>
     </BrowserRouter>

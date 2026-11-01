@@ -178,6 +178,30 @@ export class TestCaseService {
 
   async delete(id: string): Promise<void> { await prisma.testCase.delete({ where: { id } }); }
 
+  async clone(id: string, userId?: string): Promise<TestCaseDto> {
+    const source = await prisma.testCase.findUnique({ where: { id } });
+    if (!source) throw new AppError('Test case not found', 404, true, 'TEST_CASE_NOT_FOUND');
+    const extended = source as PrismaTestCase & { type?: string; mutation?: Prisma.JsonValue | null; status?: string };
+    const created = await prisma.testCase.create({ data: ({
+      endpointId: source.endpointId,
+      name: `${source.name} (Copy)`,
+      description: source.description,
+      type: extended.type ?? 'VALID',
+      enabled: true,
+      status: 'READY',
+      requestBody: source.requestBody ?? Prisma.JsonNull,
+      pathParams: source.pathParams ?? Prisma.JsonNull,
+      queryParams: source.queryParams ?? Prisma.JsonNull,
+      headers: source.headers ?? Prisma.JsonNull,
+      expectedResponse: source.expectedResponse ?? Prisma.JsonNull,
+      mutation: extended.mutation ?? Prisma.JsonNull,
+      originalPayload: source.originalPayload ?? Prisma.JsonNull,
+      modifiedBy: userId ?? null,
+      modifiedAt: new Date(),
+    } as unknown as Prisma.TestCaseUncheckedCreateInput) });
+    return testCaseDto(created);
+  }
+
   async bulkUpdateStatus(ids: string[], status: string, userId: string): Promise<void> {
     await prisma.testCase.updateMany({
       where: { id: { in: ids } },

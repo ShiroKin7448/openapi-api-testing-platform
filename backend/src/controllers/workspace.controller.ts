@@ -108,3 +108,11 @@ export const removeMember = async (req: AuthRequest, res: Response, next: NextFu
     res.status(204).send();
   } catch (error) { next(error); }
 };
+
+export const transferOwnership = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { userId } = req.body as { userId: string };
+    const member = await workspaceService.transferOwnership(req.user!.id, req.params.workspaceId, userId);
+    res.status(200).json({ success: true, data: member });
+  } catch (error) { next(error); }
+};

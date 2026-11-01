@@ -56,4 +56,7 @@ export const queryKeys = {
   projectAnalytics: (projectId: string, lastRuns: 10 | 30) => ['projects', projectId, 'analytics', lastRuns] as const,
   runAnalytics: (runId: string) => ['test-runs', runId, 'analytics'] as const,
   members: (workspaceId: string) => ['workspaces', workspaceId, 'members'] as const,
+  schedules: (projectId: string) => ['projects', projectId, 'schedules'] as const,
+  auditLog: (workspaceId: string, page: number) => ['workspaces', workspaceId, 'audit-log', page] as const,
+  apiTokens: (projectId: string) => ['projects', projectId, 'api-tokens'] as const,
 };

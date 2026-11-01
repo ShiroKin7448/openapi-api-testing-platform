@@ -48,6 +48,22 @@ model Workspace {
   updatedAt DateTime          @updatedAt
   members   WorkspaceMember[]
   projects  Project[]
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  actorUserId  String
+  action       String
+  targetType   String
+  targetId     String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
 }
 
 model WorkspaceMember {
@@ -81,6 +97,23 @@ model Project {
   environments Environment[]
   testRuns     TestRun[]
   testSchedules TestSchedule[]
+  apiTokens    ProjectApiToken[]
+}
+
+model ProjectApiToken {
+  id          String    @id @default(uuid())
+  projectId   String
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 model OpenAPISpec {

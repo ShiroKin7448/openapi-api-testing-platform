@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Save, ShieldAlert, Send, AlertCircle, Search, ShieldCheck, Cpu, Plus,
   GitMerge, Workflow, Database, ArrowRight, CheckCircle2, Shield, Clock,
-  Sparkles
+  Sparkles, Copy,
 } from 'lucide-react';
 import { openapiApi } from '../api/openapi.api';
 import { testcasesApi, type TestCaseDto } from '../api/testcases.api';
@@ -12,6 +12,7 @@ import { queryKeys } from '../api/queryClient';
 import { apiErrorMessage } from '../api/errors';
 import JsonEditor from '../components/JsonEditor';
 import TestCaseTable from '../components/TestCaseTable';
+import { useCurrentRole } from '../hooks/useCurrentRole';
 
 interface StudioEndpoint { id: string; method: string; path: string; tag: string; riskScore: number | null; }
 
@@ -50,6 +51,7 @@ export default function TestBuilder() {
   const { projectId = '' } = useParams();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { isViewer } = useCurrentRole();
   const [selectedEndpointId, setSelectedEndpointId] = useState(searchParams.get('endpointId') ?? 'ALL');
   const [selectedCaseId, setSelectedCaseId] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
@@ -109,6 +111,14 @@ export default function TestBuilder() {
       if (generated[0]) setSelectedCaseId(generated[0].id);
     },
   });
+  const clone = useMutation({
+    mutationFn: (caseId: string) => testcasesApi.clone(caseId),
+    onSuccess: (cloned) => {
+      queryClient.setQueryData<TestCaseDto[]>(queryKeys.endpointCases(cloned.endpointId), (current) => current ? [...current, cloned] : [cloned]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectCases(projectId) });
+      setSelectedCaseId(cloned.id);
+    },
+  });
 
   useEffect(() => {
     if (selectedEndpointId && selectedEndpointId !== 'ALL' && !endpoints.some((endpoint) => endpoint.id === selectedEndpointId)) setSelectedEndpointId('ALL');
@@ -141,8 +151,9 @@ export default function TestBuilder() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">Bước 2: Quản lý & Chỉnh sửa Kịch bản Kiểm thử</h1><p className="text-xs text-slate-500 mt-0.5">Chọn API ở cột bên trái, sửa payload và lưu thay đổi.</p></div>
         <div className="flex items-center space-x-2">
-          <button onClick={saveCase} disabled={!activeCase || save.isPending} className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Save className="w-3.5 h-3.5" /><span>{save.isPending ? 'Đang lưu…' : 'Lưu kịch bản'}</span></button>
-          <button onClick={() => generate.mutate()} disabled={!selectedEndpointId || selectedEndpointId === 'ALL' || cases.isLoading || Boolean(cases.data?.length) || generate.isPending} title={cases.data?.length ? 'Endpoint này đã có testcase; thao tác tạo không ghi đè testcase hiện có.' : undefined} className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Plus className="w-3.5 h-3.5" /><span>{generate.isPending ? 'Đang tạo…' : cases.data?.length ? 'Đã có kịch bản' : 'Tạo kịch bản'}</span></button>
+          {!isViewer && <button onClick={saveCase} disabled={!activeCase || save.isPending} className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Save className="w-3.5 h-3.5" /><span>{save.isPending ? 'Đang lưu…' : 'Lưu kịch bản'}</span></button>}
+          {!isViewer && <button onClick={() => activeCase && clone.mutate(activeCase.id)} disabled={!activeCase || clone.isPending} title="Tạo một bản sao của kịch bản đang chọn" className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Copy className="w-3.5 h-3.5" /><span>{clone.isPending ? 'Đang nhân bản…' : 'Nhân bản'}</span></button>}
+          {!isViewer && <button onClick={() => generate.mutate()} disabled={!selectedEndpointId || selectedEndpointId === 'ALL' || cases.isLoading || Boolean(cases.data?.length) || generate.isPending} title={cases.data?.length ? 'Endpoint này đã có testcase; thao tác tạo không ghi đè testcase hiện có.' : undefined} className="btn-secondary py-2 px-3 text-xs flex items-center space-x-1.5 shadow-sm disabled:opacity-50"><Plus className="w-3.5 h-3.5" /><span>{generate.isPending ? 'Đang tạo…' : cases.data?.length ? 'Đã có kịch bản' : 'Tạo kịch bản'}</span></button>}
           <span className="text-[11px] text-slate-500">Start a run from the project toolbar.</span>
         </div>
       </div>
@@ -164,7 +175,7 @@ export default function TestBuilder() {
 
         {selectedEndpointId === 'ALL' ? (
           <div className="flex-1 min-w-0">
-            <TestCaseTable projectId={projectId} cases={allCases.data ?? []} />
+            <TestCaseTable projectId={projectId} cases={allCases.data ?? []} isViewer={isViewer} />
           </div>
         ) : (
           <div className="flex-1 glass-panel flex flex-col overflow-hidden">
@@ -177,7 +188,7 @@ export default function TestBuilder() {
             </div>
             <div className="px-5 pt-2.5 border-b border-slate-200 dark:border-white/[0.08] flex items-center gap-6 text-xs font-semibold">{(['payload', 'rules', 'binding'] as const).map((tab, index) => <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-2.5 border-b-2 ${activeTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-slate-500'}`}>{index + 1}. {tab === 'payload' ? 'Dữ liệu JSON' : tab === 'rules' ? 'Tiêu chuẩn đánh giá' : 'Luồng phụ thuộc'}</button>)}</div>
             <div className="flex-1 p-5 overflow-y-auto">
-              {activeTab === 'payload' && <div className="h-full min-h-64 flex flex-col gap-3"><span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Request payload</span><div className="flex-1"><JsonEditor value={payloadCode} originalValue={activeCase?.originalPayload?.requestBody ? JSON.stringify(activeCase.originalPayload.requestBody, null, 2) : undefined} onChange={setPayloadCode} disabled={!activeCase || save.isPending} /></div>{payloadError && <p role="alert" className="text-xs text-rose-600">{payloadError}</p>}{save.isError && <p role="alert" className="text-xs text-rose-600">{apiErrorMessage(save.error, 'Could not save test case.')}</p>}{save.isSuccess && <p className="text-xs text-emerald-600">Test case saved.</p>}</div>}
+              {activeTab === 'payload' && <div className="h-full min-h-64 flex flex-col gap-3"><span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Request payload</span><div className="flex-1"><JsonEditor value={payloadCode} originalValue={activeCase?.originalPayload?.requestBody ? JSON.stringify(activeCase.originalPayload.requestBody, null, 2) : undefined} onChange={setPayloadCode} disabled={!activeCase || save.isPending || isViewer} /></div>{payloadError && <p role="alert" className="text-xs text-rose-600">{payloadError}</p>}{save.isError && <p role="alert" className="text-xs text-rose-600">{apiErrorMessage(save.error, 'Could not save test case.')}</p>}{save.isSuccess && <p className="text-xs text-emerald-600">Test case saved.</p>}</div>}
               {activeTab === 'rules' && (
                 <div className="space-y-4 text-xs">
                   {activeCase ? (

@@ -11,6 +11,8 @@ import testCaseRoutes from './routes/test-case.routes';
 import testRunRoutes from './routes/test-run.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import testScheduleRoutes from './routes/test-schedule.routes';
+import projectApiTokenRoutes from './routes/project-api-token.routes';
+import ciRoutes from './routes/ci.routes';
 import { AppError } from './utils/AppError';
 
 const app = express();
@@ -39,6 +41,8 @@ api.use(testCaseRoutes);
 api.use(testRunRoutes);
 api.use(testScheduleRoutes);
 api.use(analyticsRoutes);
+api.use(projectApiTokenRoutes);
+api.use(ciRoutes);
 
 app.use('/api', api);
 

@@ -6,6 +6,7 @@ import { AppError } from '../utils/AppError';
 import prisma from '../utils/prisma';
 import { NormalizedEndpoint, NormalizedOpenAPIDocument, WorkspaceRole } from '@shared/types';
 import { DependencyAnalyzerService } from '../services/dependency-analyzer.service';
+import { auditLogService } from '../services/audit-log.service';
 
 const workspaceService = new WorkspaceService();
 const testCaseService = new TestCaseService();
@@ -103,8 +104,9 @@ export class TestCaseController {
   updateTestCase = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = this.user(req);
-      await testCaseAccess(userId, req.params.testCaseId, true);
+      const row = await testCaseAccess(userId, req.params.testCaseId, true);
       const updated = await testCaseService.update(req.params.testCaseId, req.body as { name?: string; payload?: unknown; expectedStatus?: number; enabled?: boolean; status?: string }, userId);
+      await auditLogService.record(row.endpoint.spec.project.workspaceId, userId, 'TEST_CASE_UPDATED', 'TestCase', req.params.testCaseId, { name: row.name });
       res.status(200).json({ success: true, data: updated });
     } catch (error) { next(error); }
   };
@@ -125,10 +127,22 @@ export class TestCaseController {
     } catch (error) { next(error); }
   };
 
+  cloneTestCase = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = this.user(req);
+      const row = await testCaseAccess(userId, req.params.testCaseId, true);
+      const cloned = await testCaseService.clone(req.params.testCaseId, userId);
+      await auditLogService.record(row.endpoint.spec.project.workspaceId, userId, 'TEST_CASE_CLONED', 'TestCase', cloned.id, { sourceId: req.params.testCaseId, name: cloned.name });
+      res.status(201).json({ success: true, data: cloned });
+    } catch (error) { next(error); }
+  };
+
   deleteTestCase = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      await testCaseAccess(this.user(req), req.params.testCaseId, true);
+      const userId = this.user(req);
+      const row = await testCaseAccess(userId, req.params.testCaseId, true);
       await testCaseService.delete(req.params.testCaseId);
+      await auditLogService.record(row.endpoint.spec.project.workspaceId, userId, 'TEST_CASE_DELETED', 'TestCase', req.params.testCaseId, { name: row.name });
       res.status(204).send();
     } catch (error) { next(error); }
   };

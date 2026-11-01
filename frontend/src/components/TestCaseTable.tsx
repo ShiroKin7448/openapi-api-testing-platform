@@ -7,9 +7,10 @@ import { queryKeys } from '../api/queryClient';
 interface TestCaseTableProps {
   projectId: string;
   cases: TestCaseDto[];
+  isViewer?: boolean;
 }
 
-export default function TestCaseTable({ projectId, cases }: TestCaseTableProps) {
+export default function TestCaseTable({ projectId, cases, isViewer = false }: TestCaseTableProps) {
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -71,19 +72,19 @@ export default function TestCaseTable({ projectId, cases }: TestCaseTableProps) 
           </select>
         </div>
         
-        <div className="flex items-center gap-2">
+        {!isViewer && <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500 mr-2">{selectedIds.size} selected</span>
           <button onClick={() => handleBulkAction('READY')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Ready</button>
           <button onClick={() => handleBulkAction('DISABLED')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Disable</button>
           <button onClick={() => handleBulkAction('ARCHIVED')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-danger py-1.5 px-3 text-xs flex items-center gap-1"><Archive className="w-3.5 h-3.5" /> Archive</button>
-        </div>
+        </div>}
       </div>
 
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left border-collapse text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 text-xs uppercase sticky top-0">
             <tr>
-              <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-12"><input type="checkbox" checked={selectedIds.size > 0 && selectedIds.size === filteredCases.length} onChange={handleSelectAll} className="rounded border-slate-300 text-primary-600 focus:ring-primary-600" /></th>
+              {!isViewer && <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-12"><input type="checkbox" checked={selectedIds.size > 0 && selectedIds.size === filteredCases.length} onChange={handleSelectAll} className="rounded border-slate-300 text-primary-600 focus:ring-primary-600" /></th>}
               <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800">Name</th>
               <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-32">Type</th>
               <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-32">Status</th>
@@ -93,7 +94,7 @@ export default function TestCaseTable({ projectId, cases }: TestCaseTableProps) 
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {filteredCases.map(testCase => (
               <tr key={testCase.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${selectedIds.has(testCase.id) ? 'bg-primary-50 dark:bg-primary-900/10' : ''}`}>
-                <td className="py-3 px-4"><input type="checkbox" checked={selectedIds.has(testCase.id)} onChange={() => toggleSelect(testCase.id)} className="rounded border-slate-300 text-primary-600 focus:ring-primary-600" /></td>
+                {!isViewer && <td className="py-3 px-4"><input type="checkbox" checked={selectedIds.has(testCase.id)} onChange={() => toggleSelect(testCase.id)} className="rounded border-slate-300 text-primary-600 focus:ring-primary-600" /></td>}
                 <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">{testCase.name}</td>
                 <td className="py-3 px-4">
                   <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${testCase.type === 'VALID' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : testCase.type === 'NEGATIVE' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'}`}>
