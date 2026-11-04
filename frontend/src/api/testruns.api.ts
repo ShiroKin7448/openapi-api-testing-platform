@@ -28,11 +28,12 @@ export interface TestRunResultDto {
     name: string;
     type: string;
     mutation: unknown;
+    requestBody?: unknown;
+    payload?: unknown;
+    queryParams?: unknown;
+    pathParams?: unknown;
+    headers?: unknown;
     expectedResponse: unknown;
-    requestBody: unknown;
-    pathParams: unknown;
-    queryParams: unknown;
-    headers: unknown;
     endpoint: { path: string; method: string };
   };
 }

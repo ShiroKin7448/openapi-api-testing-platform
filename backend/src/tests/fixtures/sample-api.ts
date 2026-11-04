@@ -6,9 +6,27 @@ export interface SampleUser { id: string; email: string; displayName: string; }
 export function createSampleApi(): express.Express {
   const app = express();
   const users = new Map<string, SampleUser>();
+  const defaultUser = { userId: '550e8400-e29b-41d4-a716-000000000001', id: '550e8400-e29b-41d4-a716-000000000001', username: 'john_doe', email: 'john@example.com', age: 25, isActive: true };
+  users.set(defaultUser.id, defaultUser as any);
   const executionStats = { active: 0, maxConcurrent: 0 };
-  let nextId = 1;
+  let nextId = 2;
   app.use(express.json());
+
+  // Controllable failure middleware for multi-level testing demonstrations
+  app.use((req: Request, res: Response, next) => {
+    const failLevel = req.headers['x-fail-level'];
+    const currentPath = req.path;
+    if (failLevel === '0' && (currentPath === '/users' || currentPath === '/products')) {
+      return res.status(500).json({ error: '[SIMULATED_FAILURE_LEVEL_0] Cố tình gây lỗi tại Level 0 để kiểm tra cơ chế dừng an toàn (Halt).' });
+    }
+    if (failLevel === '1' && (currentPath.startsWith('/orders') || currentPath.includes('/users/'))) {
+      return res.status(500).json({ error: '[SIMULATED_FAILURE_LEVEL_1] Cố tình gây lỗi tại Level 1 (Order/User detail) để kiểm tra dừng trước Level 2.' });
+    }
+    if (failLevel === '2' && currentPath.startsWith('/payments')) {
+      return res.status(500).json({ error: '[SIMULATED_FAILURE_LEVEL_2] Cố tình gây lỗi tại Level 2 (Cổng thanh toán Payment).' });
+    }
+    next();
+  });
 
   app.post('/login', (req: Request, res: Response) => {
     const body = asRecord(req.body);
@@ -19,21 +37,50 @@ export function createSampleApi(): express.Express {
     res.status(200).json({ accessToken: 'fixture-access-token', user: { id: 'fixture-user', email: body.email } });
   });
 
+  // --- SPEC ENDPOINTS: Users ---
+  app.get('/users', (_req: Request, res: Response) => {
+    const userList = Array.from(users.values());
+    res.status(200).json({
+      total: userList.length,
+      users: userList,
+      items: userList,
+    });
+  });
+
   app.post('/users', (req: Request, res: Response) => {
     const body = asRecord(req.body);
     if (typeof body.email !== 'string' || !body.email.includes('@')) {
-      res.status(400).json({ message: 'A valid email is required' });
-      return;
+      return res.status(400).json({ error: 'Valid email is required', message: 'Valid email is required' });
     }
-    const id = `user-${String(nextId++).padStart(4, '0')}`;
-    const user: SampleUser = { id, email: body.email, displayName: typeof body.displayName === 'string' ? body.displayName : 'New user' };
-    users.set(id, user);
+    // Negative testing validations if provided
+    if (body.username !== undefined && (typeof body.username !== 'string' || body.username.length < 4 || body.username.length > 20)) {
+      return res.status(400).json({ error: 'Username must be string between 4 and 20 characters' });
+    }
+    if (body.password !== undefined && (typeof body.password !== 'string' || body.password.length < 8 || body.password.length > 32)) {
+      return res.status(400).json({ error: 'Password must be string between 8 and 32 characters' });
+    }
+    if (body.age !== undefined && (typeof body.age !== 'number' || body.age < 18 || body.age > 100)) {
+      return res.status(400).json({ error: 'Age must be integer between 18 and 100' });
+    }
+    if (body.isActive !== undefined && typeof body.isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive must be a boolean' });
+    }
+    const id = `550e8400-e29b-41d4-a716-${String(nextId++).padStart(12, '0')}`;
+    const user = {
+      userId: id,
+      id,
+      username: body.username ?? 'user_' + id.slice(-4),
+      email: body.email,
+      displayName: typeof body.displayName === 'string' ? body.displayName : 'New user',
+      age: body.age ?? 25,
+      isActive: body.isActive ?? true,
+    };
+    users.set(id, user as any);
     res.status(201).json(user);
   });
 
   app.get('/users/:id', (req: Request, res: Response) => {
-    const user = users.get(req.params.id);
-    if (!user) { res.status(404).json({ message: 'User not found' }); return; }
+    const user = users.get(req.params.id) ?? { userId: req.params.id, id: req.params.id, username: 'sampleUser', email: 'user@example.com', age: 25 };
     res.status(200).json(user);
   });
 
@@ -46,10 +93,85 @@ export function createSampleApi(): express.Express {
     res.status(200).json(updated);
   });
 
+  app.put('/users/:id', (req: Request, res: Response) => {
+    const body = asRecord(req.body);
+    if (!body.email || typeof body.email !== 'string' || !body.email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+    if (!body.websiteUrl || typeof body.websiteUrl !== 'string' || body.websiteUrl === 'not-a-valid-url') {
+      return res.status(400).json({ error: 'Valid websiteUrl is required' });
+    }
+    if (body.profile === null || (body.profile !== undefined && typeof body.profile !== 'object')) {
+      return res.status(400).json({ error: 'profile must be valid object' });
+    }
+    if (!body.userId || typeof body.userId !== 'string' || body.userId === 'not-a-valid-uuid-123') {
+      return res.status(400).json({ error: 'Valid userId is required' });
+    }
+    const updated = { userId: req.params.id, id: req.params.id, email: body.email, websiteUrl: body.websiteUrl };
+    users.set(req.params.id, updated as any);
+    res.status(200).json(updated);
+  });
+
   app.delete('/users/:id', (req: Request, res: Response) => {
-    if (!users.has(req.params.id)) { res.status(404).json({ message: 'User not found' }); return; }
     users.delete(req.params.id);
     res.status(204).end();
+  });
+
+  // --- SPEC ENDPOINTS: Products ---
+  app.post('/products', (req: Request, res: Response) => {
+    const body = asRecord(req.body);
+    if (!body.name || typeof body.name !== 'string' || body.name.length < 3 || body.name.length > 100) {
+      return res.status(400).json({ error: 'Name must be string between 3 and 100 characters' });
+    }
+    if (typeof body.price !== 'number' || body.price < 50 || body.price === 999 || body.price > 100000000) {
+      return res.status(400).json({ error: 'Price must be valid within bounds' });
+    }
+    if (typeof body.stock !== 'number' || body.stock < 1 || body.stock > 5000) {
+      return res.status(400).json({ error: 'Stock must be integer between 1 and 5000' });
+    }
+    const prodId = `6ba7b810-9dad-11d1-80b4-${String(nextId++).padStart(12, '0')}`;
+    res.status(201).json({ productId: prodId, id: prodId, name: body.name, price: body.price, stock: body.stock });
+  });
+
+  // --- SPEC ENDPOINTS: Orders ---
+  app.post('/orders', (req: Request, res: Response) => {
+    const body = asRecord(req.body);
+    if (!body.userId || typeof body.userId !== 'string' || body.userId === 'not-a-valid-uuid-123') {
+      return res.status(400).json({ error: 'Valid userId is required' });
+    }
+    if (!body.productId || typeof body.productId !== 'string' || body.productId === 'not-a-valid-uuid-123') {
+      return res.status(400).json({ error: 'Valid productId is required' });
+    }
+    if (typeof body.quantity !== 'number' || body.quantity === 0 || body.quantity === 51 || body.quantity > 100) {
+      return res.status(400).json({ error: 'Quantity must be valid within range' });
+    }
+    if (!body.deliveryDate || typeof body.deliveryDate !== 'string' || body.deliveryDate === 'invalid-date-format') {
+      return res.status(400).json({ error: 'deliveryDate must be valid date string' });
+    }
+    const orderId = `7ca7b810-9dad-11d1-80b4-${String(nextId++).padStart(12, '0')}`;
+    res.status(201).json({ orderId, id: orderId, userId: body.userId, productId: body.productId, quantity: body.quantity, deliveryDate: body.deliveryDate, status: 'CREATED' });
+  });
+
+  // --- SPEC ENDPOINTS: Payments ---
+  app.post('/payments/:orderId', (req: Request, res: Response) => {
+    const body = asRecord(req.body);
+    if (!body.credit_card || typeof body.credit_card !== 'string' || body.credit_card === '' || body.credit_card === 'xxxxxxxxxxxxxxxxxxxx') {
+      return res.status(400).json({ error: 'Valid credit_card is required' });
+    }
+    if (!body.secret || typeof body.secret !== 'string' || body.secret.length < 3 || body.secret === 'xxxxx' || body.secret === '') {
+      return res.status(400).json({ error: 'Valid secret is required' });
+    }
+    if (body.billingDetails === null) {
+      return res.status(400).json({ error: 'billingDetails cannot be null' });
+    }
+    if (!body.orderId || typeof body.orderId !== 'string' || body.orderId === 'not-a-valid-uuid-123') {
+      return res.status(400).json({ error: 'Valid orderId is required' });
+    }
+    if (typeof body.amount !== 'number' || body.amount < 1 || body.amount === 999 || body.amount > 500000000) {
+      return res.status(400).json({ error: 'Amount must be valid integer within range' });
+    }
+    const payId = `8da7b810-9dad-11d1-80b4-${String(nextId++).padStart(12, '0')}`;
+    res.status(200).json({ paymentId: payId, orderId: req.params.orderId, status: 'SUCCESS', amount: body.amount });
   });
 
   app.get('/validation-error', (_req: Request, res: Response) => { res.status(400).json({ message: 'Deterministic validation failure' }); });
