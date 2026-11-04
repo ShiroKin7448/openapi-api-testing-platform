@@ -96,6 +96,106 @@ paths:
       operationId: deleteUser
       responses:
         '204': { description: User deleted }
+  /products:
+    post:
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, price, stock]
+              properties:
+                name: { type: string, minLength: 3, maxLength: 100 }
+                price: { type: number, minimum: 50, maximum: 100000000 }
+                stock: { type: integer, minimum: 1, maximum: 5000 }
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /orders:
+    post:
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, productId, quantity, deliveryDate]
+              properties:
+                userId: { type: string, format: uuid }
+                productId: { type: string, format: uuid }
+                quantity: { type: integer, minimum: 1, maximum: 100 }
+                deliveryDate: { type: string, format: date }
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /payments/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credit_card, secret, billingDetails, orderId, amount]
+              properties:
+                credit_card: { type: string }
+                secret: { type: string, minLength: 3 }
+                billingDetails:
+                  type: object
+                  required: [name, address]
+                  properties:
+                    name: { type: string }
+                    address:
+                      type: object
+                      required: [street, city, zip]
+                      properties:
+                        street: { type: string }
+                        city: { type: string }
+                        zip: { type: string }
+                orderId: { type: string, format: uuid }
+                amount: { type: number, minimum: 1, maximum: 500000000 }
+      responses:
+        '200':
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /validation-error:
     get:
       operationId: validationError
@@ -193,11 +293,40 @@ components:
   schemas:
     User:
       type: object
-      required: [id, email, displayName]
+      required: [id, userId, email, displayName]
       properties:
         id: { type: string }
+        userId: { type: string }
         email: { type: string, format: email }
         displayName: { type: string }
+    Product:
+      type: object
+      required: [id, productId, name, price, stock]
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        name: { type: string }
+        price: { type: number }
+        stock: { type: integer }
+    Order:
+      type: object
+      required: [id, orderId, userId, productId, quantity, deliveryDate, status]
+      properties:
+        id: { type: string }
+        orderId: { type: string }
+        userId: { type: string }
+        productId: { type: string }
+        quantity: { type: integer }
+        deliveryDate: { type: string }
+        status: { type: string }
+    Payment:
+      type: object
+      required: [paymentId, orderId, status, amount]
+      properties:
+        paymentId: { type: string }
+        orderId: { type: string }
+        status: { type: string }
+        amount: { type: number }
     Problem:
       type: object
       required: [message]
