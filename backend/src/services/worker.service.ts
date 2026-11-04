@@ -91,6 +91,9 @@ export class WorkerService {
     if (variables.API_TOKEN && !Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')) {
       headers.Authorization = `Bearer ${variables.API_TOKEN}`;
     }
+    if (variables.FAIL_LEVEL) {
+      headers['x-fail-level'] = variables.FAIL_LEVEL;
+    }
 
     const normalized = jsonRecord(testCase.endpoint.spec.normalizedContent);
     const normalizedEndpoints: unknown[] = Array.isArray(normalized.endpoints) ? normalized.endpoints : [];

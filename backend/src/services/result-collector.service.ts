@@ -28,9 +28,15 @@ export class ResultCollectorService {
       endpointResponses
     );
 
-    // If we expect 400 but get 200, or if schema violates constraints, mark as FAILED
-    const isSuccess = response.status.toString() === expectedStatus && validation.isValid;
+    // If expected status is 4xx (e.g. 400 for NEGATIVE mutation tests) and the server correctly returned that 4xx status,
+    // do not fail the test simply because the OpenAPI spec author omitted declaring the 4xx response schema.
+    const isExpectedErrorPassing = expectedStatus.startsWith('4')
+      && response.status.toString() === expectedStatus
+      && (validation.isValid || validation.errors.every(e => e.includes('not defined in the OpenAPI spec')));
+
+    const isSuccess = (response.status.toString() === expectedStatus && validation.isValid) || isExpectedErrorPassing;
     const finalStatus = isSuccess ? TestResultStatus.PASSED : TestResultStatus.FAILED;
+    const finalValidationErrors = isExpectedErrorPassing && !validation.isValid ? [] : validation.errors;
 
     // 1. Save Result to Database (avoid duplicates if worker and in-process runner run concurrently)
     const existingResult = await prisma.testResult.findFirst({
@@ -47,10 +53,14 @@ export class ResultCollectorService {
         status: finalStatus,
         levelIndex: job.levelIndex,
         actualResponse: {
+          requestPayload: job.payload,
+          requestHeaders: job.headers,
+          queryParams: job.queryParams,
+          pathParams: job.pathParams,
           status: response.status,
           headers: response.headers,
           body: response.data,
-          validationErrors: validation.errors
+          validationErrors: finalValidationErrors
         },
         executionTimeMs: response.executionTimeMs
       } as unknown as Prisma.TestResultUncheckedCreateInput)

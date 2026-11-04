@@ -366,12 +366,12 @@ export const getRunEvents = async (req: AuthRequest, res: Response, next: NextFu
 
 async function buildProgress(run: Awaited<ReturnType<typeof accessibleRun>>): Promise<TestRunProgress> {
   const results = run.testResults ?? [];
-  const completed = results.length;
+  const completed = Math.min(results.length, run.totalTests);
   const passed = results.filter((result) => result.status === 'PASSED').length;
   const failed = results.filter((result) => result.status === 'FAILED' || result.status === 'ERROR').length;
   const currentLevel = run.status === 'RUNNING' ? run.currentLevel + 1 : run.status === 'COMPLETED' ? run.currentLevel : run.startTime ? Math.max(1, run.currentLevel) : 0;
   return { runId: run.id, status: run.status as TestRunProgress['status'], total: run.totalTests, completed, passed, failed,
-    percentage: run.totalTests === 0 ? 0 : Math.round(completed * 100 / run.totalTests), currentLevel, updatedAt: run.updatedAt.toISOString() };
+    percentage: run.totalTests === 0 ? 0 : Math.min(100, Math.max(0, Math.round(completed * 100 / run.totalTests))), currentLevel, updatedAt: run.updatedAt.toISOString() };
 }
 
 export const getRunResults = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
