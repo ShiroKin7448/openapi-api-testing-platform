@@ -1,118 +1,142 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Archive, XCircle } from 'lucide-react';
+import { Archive, CheckCircle2, ChevronRight, ListChecks, Repeat, Search, XCircle } from 'lucide-react';
 import { testcasesApi, type TestCaseDto } from '../api/testcases.api';
 import { queryKeys } from '../api/queryClient';
+import { ConfirmDialog, EmptyState, MethodBadge } from './ui';
 
 interface TestCaseTableProps {
   projectId: string;
   cases: TestCaseDto[];
   isViewer?: boolean;
+  endpointsById?: Map<string, { method: string; path: string }>;
+  onOpen?: (testCase: TestCaseDto) => void;
 }
 
-export default function TestCaseTable({ projectId, cases, isViewer = false }: TestCaseTableProps) {
+const STATUS_LABEL: Record<string, { label: string; className: string }> = {
+  READY: { label: 'Sẵn sàng', className: 'badge-success' },
+  DRAFT: { label: 'Nháp', className: 'badge-neutral' },
+  DISABLED: { label: 'Tạm tắt', className: 'badge-warning' },
+  ARCHIVED: { label: 'Lưu trữ', className: 'badge-neutral' },
+};
+const TYPE_LABEL: Record<string, { label: string; className: string }> = {
+  VALID: { label: 'Hợp lệ', className: 'badge-success' },
+  NEGATIVE: { label: 'Dữ liệu sai', className: 'badge-warning' },
+  BOUNDARY: { label: 'Giá trị biên', className: 'badge-danger' },
+};
+
+export default function TestCaseTable({ projectId, cases, isViewer = false, endpointsById, onOpen }: TestCaseTableProps) {
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');
+  const [confirmAction, setConfirmAction] = useState<'DISABLED' | 'ARCHIVED' | null>(null);
 
   const bulkStatus = useMutation({
     mutationFn: (status: string) => testcasesApi.bulkStatus(Array.from(selectedIds), status),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectCases(projectId) });
+      void queryClient.invalidateQueries({ queryKey: ['endpoints'] });
       setSelectedIds(new Set());
+      setConfirmAction(null);
     },
+    meta: { successMessage: 'Đã cập nhật trạng thái kịch bản.' },
   });
 
-  const handleSelectAll = () => {
-    if (selectedIds.size === filteredCases.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filteredCases.map(c => c.id)));
-  };
-
-  const toggleSelect = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
-  };
-
-  const handleBulkAction = (action: string) => {
-    if (selectedIds.size === 0) return;
-    if (action === 'ARCHIVED' || action === 'DISABLED') {
-      if (!window.confirm(`Are you sure you want to ${action.toLowerCase()} ${selectedIds.size} test cases?`)) return;
-    }
-    bulkStatus.mutate(action);
-  };
-
-  const filteredCases = cases.filter(c => {
-    if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
+  const filteredCases = useMemo(() => cases.filter((c) => {
+    if (statusFilter !== 'ALL' && (c.status || 'READY') !== statusFilter) return false;
     if (typeFilter !== 'ALL' && c.type !== typeFilter) return false;
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const endpoint = endpointsById?.get(c.endpointId);
+      const haystack = `${c.name} ${endpoint?.method ?? ''} ${endpoint?.path ?? ''}`.toLowerCase();
+      if (!haystack.includes(search.toLowerCase())) return false;
+    }
     return true;
-  });
+  }), [cases, statusFilter, typeFilter, search, endpointsById]);
+
+  const allSelected = filteredCases.length > 0 && filteredCases.every((c) => selectedIds.has(c.id));
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(filteredCases.map((c) => c.id)));
+  const toggle = (id: string) => setSelectedIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
-        <div className="flex items-center gap-3">
-          <input type="text" placeholder="Search test cases..." value={search} onChange={e => setSearch(e.target.value)} className="input-text text-sm w-64" />
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input-text text-sm">
-            <option value="ALL">All Status</option>
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="DISABLED">Disabled</option>
-            <option value="ARCHIVED">Archived</option>
+    <div className="glass-panel flex h-full flex-col overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4 dark:border-white/[0.08]">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <div className="relative sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input type="text" placeholder="Tìm theo tên, endpoint…" value={search} onChange={(e) => setSearch(e.target.value)} className="input-premium input-sm pl-8" />
+          </div>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-premium input-sm sm:!w-40" aria-label="Lọc trạng thái">
+            <option value="ALL">Mọi trạng thái</option>
+            {Object.entries(STATUS_LABEL).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}
           </select>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="input-text text-sm">
-            <option value="ALL">All Types</option>
-            <option value="VALID">Valid</option>
-            <option value="BOUNDARY">Boundary</option>
-            <option value="NEGATIVE">Negative</option>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="input-premium input-sm sm:!w-40" aria-label="Lọc loại">
+            <option value="ALL">Mọi loại</option>
+            {Object.entries(TYPE_LABEL).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}
           </select>
         </div>
-        
-        {!isViewer && <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 mr-2">{selectedIds.size} selected</span>
-          <button onClick={() => handleBulkAction('READY')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Ready</button>
-          <button onClick={() => handleBulkAction('DISABLED')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Disable</button>
-          <button onClick={() => handleBulkAction('ARCHIVED')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-danger py-1.5 px-3 text-xs flex items-center gap-1"><Archive className="w-3.5 h-3.5" /> Archive</button>
-        </div>}
+        {!isViewer && (
+          <div className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+            <span className="text-xs text-slate-500">{selectedIds.size > 0 ? `Đã chọn ${selectedIds.size}` : 'Chưa chọn kịch bản'}</span>
+            <button onClick={() => bulkStatus.mutate('READY')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-secondary btn-sm"><CheckCircle2 className="h-3.5 w-3.5" />Bật</button>
+            <button onClick={() => setConfirmAction('DISABLED')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-secondary btn-sm"><XCircle className="h-3.5 w-3.5" />Tạm tắt</button>
+            <button onClick={() => setConfirmAction('ARCHIVED')} disabled={selectedIds.size === 0 || bulkStatus.isPending} className="btn-ghost-danger btn-sm"><Archive className="h-3.5 w-3.5" />Lưu trữ</button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left border-collapse text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 text-xs uppercase sticky top-0">
-            <tr>
-              {!isViewer && <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-12"><input type="checkbox" checked={selectedIds.size > 0 && selectedIds.size === filteredCases.length} onChange={handleSelectAll} className="rounded border-slate-300 text-primary-600 focus:ring-primary-600" /></th>}
-              <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800">Name</th>
-              <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-32">Type</th>
-              <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-32">Status</th>
-              <th className="py-3 px-4 font-medium border-b border-slate-200 dark:border-slate-800 w-32">Modified</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-            {filteredCases.map(testCase => (
-              <tr key={testCase.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${selectedIds.has(testCase.id) ? 'bg-primary-50 dark:bg-primary-900/10' : ''}`}>
-                {!isViewer && <td className="py-3 px-4"><input type="checkbox" checked={selectedIds.has(testCase.id)} onChange={() => toggleSelect(testCase.id)} className="rounded border-slate-300 text-primary-600 focus:ring-primary-600" /></td>}
-                <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">{testCase.name}</td>
-                <td className="py-3 px-4">
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${testCase.type === 'VALID' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : testCase.type === 'NEGATIVE' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'}`}>
-                    {testCase.type}
-                  </span>
-                </td>
-                <td className="py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400">{testCase.status || 'READY'}</td>
-                <td className="py-3 px-4 text-xs text-slate-500">{new Date(testCase.updatedAt).toLocaleDateString()}</td>
-              </tr>
-            ))}
-            {filteredCases.length === 0 && (
+        {filteredCases.length === 0 ? (
+          <EmptyState compact icon={<ListChecks className="h-6 w-6" />} title={cases.length ? 'Không có kịch bản nào khớp bộ lọc' : 'Chưa có kịch bản nào'} description={cases.length ? undefined : 'Nạp tài liệu OpenAPI, hệ thống sẽ tự sinh kịch bản.'} />
+        ) : (
+          <table className="data-table hoverable">
+            <thead className="sticky top-0 z-[1]">
               <tr>
-                <td colSpan={5} className="py-12 text-center text-slate-500">No test cases found matching filters.</td>
+                {!isViewer && <th className="w-10"><input type="checkbox" aria-label="Chọn tất cả" checked={allSelected} onChange={toggleAll} className="h-4 w-4 rounded border-slate-300 text-primary-600" /></th>}
+                <th>Kịch bản</th>
+                <th>Loại</th>
+                <th>Trạng thái</th>
+                <th>Bổ sung</th>
+                <th>Cập nhật</th>
+                {onOpen && <th className="w-10"><span className="sr-only">Mở</span></th>}
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredCases.map((testCase) => {
+                const endpoint = endpointsById?.get(testCase.endpointId);
+                const status = STATUS_LABEL[testCase.status || 'READY'] ?? { label: testCase.status, className: 'badge-neutral' };
+                const type = TYPE_LABEL[testCase.type] ?? { label: testCase.type, className: 'badge-neutral' };
+                return (
+                  <tr key={testCase.id} className={`${selectedIds.has(testCase.id) ? 'bg-primary-50/60 dark:bg-primary-500/5' : ''} ${onOpen ? 'cursor-pointer' : ''}`} onClick={() => onOpen?.(testCase)}>
+                    {!isViewer && <td onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Chọn ${testCase.name}`} checked={selectedIds.has(testCase.id)} onChange={() => toggle(testCase.id)} className="h-4 w-4 rounded border-slate-300 text-primary-600" /></td>}
+                    <td className="min-w-[16rem]">
+                      <div className="font-medium text-slate-900 dark:text-slate-100">{testCase.name}</div>
+                      {endpoint && <div className="mt-0.5 flex items-center gap-1.5"><MethodBadge method={endpoint.method} /><span className="truncate font-mono text-[11px] text-slate-500">{endpoint.path}</span></div>}
+                    </td>
+                    <td><span className={type.className}>{type.label}</span></td>
+                    <td><span className={status.className}>{status.label}</span></td>
+                    <td>
+                      <div className="flex gap-1">
+                        {(testCase.assertions?.length ?? 0) > 0 && <span className="badge-primary" title="Số điều kiện kiểm tra tùy chỉnh"><ListChecks className="h-3 w-3" />{testCase.assertions.length}</span>}
+                        {testCase.datasetId && <span className="badge-info" title="Chạy lặp theo bộ dữ liệu"><Repeat className="h-3 w-3" />CSV</span>}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap text-xs text-slate-500">{new Date(testCase.updatedAt).toLocaleDateString('vi-VN')}</td>
+                    {onOpen && <td><ChevronRight className="h-4 w-4 text-slate-300" /></td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
+
+      <ConfirmDialog open={confirmAction !== null} danger={confirmAction === 'ARCHIVED'}
+        title={confirmAction === 'ARCHIVED' ? 'Lưu trữ kịch bản?' : 'Tạm tắt kịch bản?'}
+        confirmLabel={confirmAction === 'ARCHIVED' ? 'Lưu trữ' : 'Tạm tắt'} pending={bulkStatus.isPending}
+        message={<>{selectedIds.size} kịch bản sẽ {confirmAction === 'ARCHIVED' ? 'được lưu trữ' : 'tạm tắt'} và không được chạy trong các lượt kiểm thử tiếp theo. Bạn có thể bật lại bất cứ lúc nào.</>}
+        onCancel={() => setConfirmAction(null)} onConfirm={() => confirmAction && bulkStatus.mutate(confirmAction)} />
     </div>
   );
 }

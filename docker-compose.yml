@@ -1,16 +1,24 @@
-version: '3.8'
+# Chỉ chạy Postgres + Redis để dev local (như trước):   docker compose up -d
+# Chạy TOÀN BỘ hệ thống bằng Docker:                     docker compose --profile app up -d --build
+#   Giao diện:  http://localhost:8080      API: http://localhost:3000/api
+# Biến môi trường đọc từ file .env ở thư mục gốc (copy từ .env.example). Bắt buộc: JWT_SECRET, ENCRYPTION_KEY.
 
 services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: rootpassword
-      POSTGRES_DB: autotest_db
+      POSTGRES_USER: ${POSTGRES_USER:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rootpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-autotest_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     restart: unless-stopped
 
   redis:
@@ -19,6 +27,52 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    profiles: ["app"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-rootpassword}@postgres:5432/${POSTGRES_DB:-autotest_db}?schema=public
+      REDIS_URL: redis://redis:6379/0
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      TRUST_PROXY: "1"
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      WORKER_REQUEST_TIMEOUT_MS: ${WORKER_REQUEST_TIMEOUT_MS:-5000}
+      SCHEDULE_TIMEZONE: ${SCHEDULE_TIMEZONE:-Asia/Ho_Chi_Minh}
+      RETENTION_RUN_DAYS: ${RETENTION_RUN_DAYS:-30}
+      RETENTION_KEEP_RUNS_PER_PROJECT: ${RETENTION_KEEP_RUNS_PER_PROJECT:-20}
+      RETENTION_EVENT_DAYS: ${RETENTION_EVENT_DAYS:-7}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    profiles: ["app"]
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
     restart: unless-stopped
 
 volumes:

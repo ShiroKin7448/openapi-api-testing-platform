@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { createRun, getRuns, getRun, getRunProgress, getRunResults, getRunEvents, cancelRun, getQueueStatus } from '../controllers/test-run.controller';
 import { requireAuth } from '../middlewares/requireAuth';
 import { validateRequest } from '../middlewares/validateRequest';
-import { createTestRunBody, noQueryParams, projectParams, testRunParams, testRunResultsQuery } from '../validation/api.schemas';
+import { exportRun, compareRuns } from '../controllers/report.controller';
+import { z } from 'zod';
+import { idSchema, createTestRunBody, noQueryParams, projectParams, testRunParams, testRunResultsQuery } from '../validation/api.schemas';
 
 const router = Router();
 router.post('/projects/:projectId/test-runs', requireAuth, validateRequest({ params: projectParams, body: createTestRunBody }), createRun);
@@ -13,4 +15,8 @@ router.get('/test-runs/:testRunId/results', requireAuth, validateRequest({ param
 router.get('/test-runs/:testRunId/progress', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams }), getRunProgress);
 router.get('/test-runs/:testRunId/events', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams }), getRunEvents);
 router.post('/test-runs/:testRunId/cancel', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams, body: noQueryParams }), cancelRun);
+const exportQuery = z.object({ format: z.enum(['junit', 'html', 'postman', 'json']), inline: z.enum(['true', 'false']).optional() }).strict();
+const compareQuery = z.object({ base: idSchema, head: idSchema, threshold: z.coerce.number().min(1).max(500).optional() }).strict();
+router.get('/test-runs/:testRunId/export', requireAuth, validateRequest({ params: testRunParams, query: exportQuery }), exportRun);
+router.get('/projects/:projectId/test-runs/compare', requireAuth, validateRequest({ params: projectParams, query: compareQuery }), compareRuns);
 export default router;

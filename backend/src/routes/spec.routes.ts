@@ -5,9 +5,12 @@ import { openapiUpload } from '../middlewares/openapiUpload';
 import { validateRequest } from '../middlewares/validateRequest';
 import { idSchema, noQueryParams, projectParams } from '../validation/api.schemas';
 import { z } from 'zod';
+import { diffSpecVersions, listSpecVersions } from '../controllers/spec-version.controller';
 
 const projectRouter = Router();
 projectRouter.post('/:projectId/specs/import', requireAuth, validateRequest({ params: projectParams, query: noQueryParams }), openapiUpload, importSpec);
+projectRouter.get('/:projectId/spec-versions', requireAuth, validateRequest({ params: projectParams, query: noQueryParams }), listSpecVersions);
+projectRouter.get('/:projectId/spec-versions/diff', requireAuth, validateRequest({ params: projectParams, query: z.object({ base: idSchema, head: idSchema }).strict() }), diffSpecVersions);
 projectRouter.get('/:projectId/specs', requireAuth, validateRequest({ params: projectParams, query: noQueryParams }), getSpecs);
 projectRouter.delete('/:projectId/specs/:specId', requireAuth, validateRequest({
   params: projectParams.extend({ specId: idSchema }), query: noQueryParams,

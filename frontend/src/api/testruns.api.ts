@@ -16,6 +16,9 @@ export interface TestRunDto {
   startTime: string | null;
   endTime: string | null;
   createdAt: string;
+  triggerType?: 'MANUAL' | 'SCHEDULED' | 'CI';
+  failureReason?: string | null;
+  durationMs?: number | null;
 }
 export interface TestRunResultDto {
   id: string;

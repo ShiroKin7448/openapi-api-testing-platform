@@ -1,0 +1,96 @@
+# =============================================================================
+#  API Test Auto – GitHub Actions workflow mẫu
+#  Copy file này vào repo của bạn tại: .github/workflows/api-test.yml
+#
+#  Cần khai báo trong Settings → Secrets and variables → Actions:
+#    API_TEST_URL         URL máy chủ API Test Auto, ví dụ https://apitest.example.com
+#    API_TEST_TOKEN       Project API Token (tạo ở Cài đặt dự án → Tích hợp CI/CD)
+#    API_TEST_PROJECT_ID  ID dự án
+#    API_TEST_ENV_ID      (tùy chọn) ID môi trường; bỏ trống = môi trường đầu tiên
+# =============================================================================
+name: API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  api-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      checks: write          # để hiển thị tick xanh/đỏ cho từng test case
+      pull-requests: write
+    env:
+      API_TEST_URL: ${{ secrets.API_TEST_URL }}
+      API_TEST_TOKEN: ${{ secrets.API_TEST_TOKEN }}
+      API_TEST_PROJECT_ID: ${{ secrets.API_TEST_PROJECT_ID }}
+      API_TEST_ENV_ID: ${{ secrets.API_TEST_ENV_ID }}
+    steps:
+      - name: Kích hoạt lượt kiểm thử
+        id: trigger
+        run: |
+          set -euo pipefail
+          BODY='{}'
+          if [ -n "${API_TEST_ENV_ID:-}" ]; then BODY="{\"environmentId\":\"${API_TEST_ENV_ID}\"}"; fi
+          RESPONSE=$(curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer ${API_TEST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            "${API_TEST_URL}/api/ci/projects/${API_TEST_PROJECT_ID}/runs")
+          echo "$RESPONSE"
+          RUN_ID=$(echo "$RESPONSE" | jq -r '.data.runId')
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then echo "Không tạo được lượt chạy" >&2; exit 1; fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Chờ lượt kiểm thử hoàn tất
+        id: wait
+        run: |
+          set -euo pipefail
+          RUN_ID='${{ steps.trigger.outputs.run_id }}'
+          for i in $(seq 1 180); do
+            STATUS_JSON=$(curl -sS --fail-with-body -H "Authorization: Bearer ${API_TEST_TOKEN}" "${API_TEST_URL}/api/ci/test-runs/${RUN_ID}")
+            FINISHED=$(echo "$STATUS_JSON" | jq -r '.data.finished')
+            echo "[$i] $(echo "$STATUS_JSON" | jq -c '{status: .data.status, passed: .data.summary.passed, failed: .data.summary.failed, total: .data.summary.total}')"
+            if [ "$FINISHED" = "true" ]; then
+              echo "passed=$(echo "$STATUS_JSON" | jq -r '.data.passed')" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Hết thời gian chờ lượt chạy" >&2
+          exit 1
+
+      - name: Tải báo cáo JUnit và HTML
+        if: always() && steps.trigger.outputs.run_id != ''
+        run: |
+          RUN_ID='${{ steps.trigger.outputs.run_id }}'
+          mkdir -p api-test-reports
+          curl -sS -H "Authorization: Bearer ${API_TEST_TOKEN}" -o api-test-reports/junit.xml "${API_TEST_URL}/api/ci/test-runs/${RUN_ID}/export?format=junit"
+          curl -sS -H "Authorization: Bearer ${API_TEST_TOKEN}" -o api-test-reports/report.html "${API_TEST_URL}/api/ci/test-runs/${RUN_ID}/export?format=html"
+
+      - name: Hiển thị kết quả từng test case
+        if: always() && steps.trigger.outputs.run_id != ''
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: api-test-reports/junit.xml
+          check_name: API Test Results
+          include_passed: true
+
+      - name: Lưu báo cáo HTML
+        if: always() && steps.trigger.outputs.run_id != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-report
+          path: api-test-reports/
+
+      - name: Kết luận
+        run: |
+          if [ "${{ steps.wait.outputs.passed }}" != "true" ]; then
+            echo "::error::Kiểm thử API không đạt. Xem báo cáo trong artifact api-test-report."
+            exit 1
+          fi
+          echo "Tất cả kiểm thử API đều đạt."

@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/build
+**/build-verification
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.claude
+*.log

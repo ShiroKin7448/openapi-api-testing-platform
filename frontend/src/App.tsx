@@ -13,6 +13,12 @@ import UserSettings from './pages/UserSettings';
 import WorkspaceMembers from './pages/WorkspaceMembers';
 import AuditLog from './pages/AuditLog';
 import Login from './pages/Login';
+import TestRuns from './pages/TestRuns';
+import RunCompare from './pages/RunCompare';
+import Datasets from './pages/Datasets';
+import SpecVersions from './pages/SpecVersions';
+import { FolderKanban, Plus, ArrowRight, Building2 } from 'lucide-react';
+import { Card, EmptyState, ErrorBlock, LoadingBlock, PageHeader, formatDateTime } from './components/ui';
 import { authApi } from './api/auth.api';
 import { projectsApi } from './api/projects.api';
 import { workspacesApi } from './api/workspaces.api';
@@ -91,51 +97,56 @@ function ProjectSelection() {
     );
   }
 
+  const canCreateProject = ['OWNER', 'ADMIN'].includes(workspaceRole ?? '');
+  const currentWorkspaceName = workspaces.data?.find((item) => item.id === workspaceId)?.name ?? '—';
+
   return (
-    <div className="max-w-3xl space-y-5 animate-in fade-in duration-300">
-      <section className="glass-panel p-6 space-y-4">
-        <div><h1 className="text-xl font-bold">Workspace & Projects Dashboard</h1><p className="text-sm text-slate-500 mt-1">Manage your workspaces and projects.</p></div>
-        <div className="grid md:grid-cols-2 gap-4">
-          <form onSubmit={createWorkspaceSubmit} className="space-y-3 rounded-xl border border-slate-200 dark:border-white/[0.08] p-4">
-            <h2 className="text-sm font-semibold">Tạo không gian làm việc</h2>
-            <label className="block text-xs">Tên không gian làm việc<input required maxLength={100} value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} className="input-premium mt-1" /></label>
-            <button disabled={createWorkspace.isPending} className="btn-primary px-4 py-2 text-xs disabled:opacity-50">{createWorkspace.isPending ? 'Đang tạo…' : 'Tạo không gian làm việc'}</button>
-            {createWorkspace.isError && <p role="alert" className="text-xs text-rose-600">{createWorkspace.error.message}</p>}
-          </form>
-          <form onSubmit={createProjectSubmit} className="space-y-3 rounded-xl border border-slate-200 dark:border-white/[0.08] p-4">
-            <h2 className="text-sm font-semibold">Tạo dự án</h2>
-            <label className="block text-xs">Không gian làm việc<select required value={workspaceId} onChange={(event) => setActiveWorkspace(event.target.value)} className="input-premium mt-1">{(workspaces.data ?? []).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select></label>
-            <label className="block text-xs">Tên dự án<input required maxLength={100} value={projectName} onChange={(event) => setProjectName(event.target.value)} className="input-premium mt-1" /></label>
-            <label className="block text-xs">Mô tả<input value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} className="input-premium mt-1" /></label>
-            <button disabled={!workspaceId || !['OWNER', 'ADMIN'].includes(workspaceRole ?? '') || createProject.isPending} className="btn-primary px-4 py-2 text-xs disabled:opacity-50">{createProject.isPending ? 'Đang tạo…' : 'Tạo dự án'}</button>
-            {workspaceRole && !['OWNER', 'ADMIN'].includes(workspaceRole) && <p className="text-xs text-slate-500">Chỉ chủ sở hữu và quản trị viên mới có thể tạo dự án.</p>}
-            {createProject.isError && <p role="alert" className="text-xs text-rose-600">{createProject.error.message}</p>}
-          </form>
-        </div>
-      </section>
-      <section className="glass-panel p-6 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-base font-bold">Dự án</h2><p className="text-xs text-slate-500 mt-1">Không gian làm việc: {workspaces.data?.find((item) => item.id === workspaceId)?.name ?? '—'}</p></div>
-          <select aria-label="Chọn không gian làm việc" value={workspaceId} onChange={(event) => setActiveWorkspace(event.target.value)} className="rounded-lg px-3 py-2 text-sm bg-slate-50 dark:bg-dark-900 border border-slate-200 dark:border-white/[0.1]">{(workspaces.data ?? []).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select>
-        </div>
-        {projects.isLoading && <p className="text-sm text-slate-500">Đang tải dự án…</p>}
-        {projects.isError && <p role="alert" className="text-xs text-rose-600">Không tải được dự án. <button onClick={() => void projects.refetch()} className="underline">Thử lại</button></p>}
-        {!projects.isLoading && !projects.isError && (projects.data ?? []).length === 0 && (
-          <div className="p-8 text-center border border-dashed border-slate-200 dark:border-white/[0.1] rounded-xl">
-            <p className="text-sm text-slate-500 mb-4">Không gian làm việc này chưa có dự án.</p>
-            <button onClick={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })} className="btn-secondary px-4 py-2 text-sm">Tạo dự án đầu tiên</button>
+    <div className="animate-in space-y-5">
+      <PageHeader icon={<FolderKanban className="h-5 w-5" />} title="Dự án" description={<>Không gian làm việc: <strong>{currentWorkspaceName}</strong>. Chọn một dự án để bắt đầu kiểm thử.</>}
+        actions={<select aria-label="Chọn không gian làm việc" value={workspaceId} onChange={(event) => setActiveWorkspace(event.target.value)} className="input-premium input-sm !w-56">{(workspaces.data ?? []).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select>} />
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
+        <Card title="Danh sách dự án" subtitle={`${projects.data?.length ?? 0} dự án`} bodyClassName="p-4">
+          {projects.isLoading && <LoadingBlock label="Đang tải dự án…" />}
+          {projects.isError && <ErrorBlock message="Không tải được dự án." onRetry={() => void projects.refetch()} />}
+          {!projects.isLoading && !projects.isError && (projects.data ?? []).length === 0 && (
+            <EmptyState icon={<FolderKanban className="h-6 w-6" />} title="Không gian làm việc này chưa có dự án" description={canCreateProject ? 'Tạo dự án đầu tiên ở khung bên cạnh.' : 'Hãy nhờ chủ sở hữu hoặc quản trị viên tạo dự án.'} />
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(projects.data ?? []).map((project) => (
+              <button key={project.id} onClick={() => navigate(`/projects/${project.id}`)} className="glass-panel-interactive group flex flex-col items-start p-4 text-left">
+                <div className="flex w-full items-center justify-between gap-2">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary-50 text-sm font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">{project.name.slice(0, 2).toUpperCase()}</span>
+                  <ArrowRight className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary-500" />
+                </div>
+                <span className="mt-3 block text-sm font-semibold text-slate-900 dark:text-white">{project.name}</span>
+                <span className="mt-0.5 line-clamp-2 text-xs text-slate-500">{project.description || 'Chưa có mô tả'}</span>
+                <span className="mt-2 text-[11px] text-slate-400">Tạo {formatDateTime(project.createdAt as unknown as string)}</span>
+              </button>
+            ))}
           </div>
-        )}
-        {(projects.data ?? []).map((project) => (
-          <div key={project.id} className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-white/[0.08] p-3 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
-            <button onClick={() => navigate(`/projects/${project.id}`)} className="flex-1 text-left">
-              <span className="block text-sm font-semibold">{project.name}</span>
-              <span className="text-xs text-slate-500">{project.description || 'Chưa có mô tả'}</span>
-            </button>
-            <button onClick={() => navigate(`/projects/${project.id}`)} className="p-2 text-slate-400 hover:text-primary-600 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20">Mở &rarr;</button>
-          </div>
-        ))}
-      </section>
+        </Card>
+
+        <div className="space-y-5">
+          <Card title={<span className="flex items-center gap-2"><Plus className="h-4 w-4 text-slate-400" />Tạo dự án</span>}>
+            {canCreateProject ? (
+              <form onSubmit={createProjectSubmit} className="space-y-3">
+                <label className="block"><span className="field-label">Tên dự án</span><input required maxLength={100} value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="VD: API Cửa hàng" className="input-premium" /></label>
+                <label className="block"><span className="field-label">Mô tả (tùy chọn)</span><input value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} className="input-premium" /></label>
+                <button disabled={!workspaceId || createProject.isPending || !projectName.trim()} className="btn-primary w-full">{createProject.isPending ? 'Đang tạo…' : 'Tạo dự án'}</button>
+                {createProject.isError && <p role="alert" className="text-xs text-rose-600">{createProject.error.message}</p>}
+              </form>
+            ) : <p className="text-sm text-slate-500">Chỉ chủ sở hữu và quản trị viên mới tạo được dự án.</p>}
+          </Card>
+          <Card title={<span className="flex items-center gap-2"><Building2 className="h-4 w-4 text-slate-400" />Không gian làm việc mới</span>}>
+            <form onSubmit={createWorkspaceSubmit} className="space-y-3">
+              <label className="block"><span className="field-label">Tên không gian làm việc</span><input required maxLength={100} value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} placeholder="VD: Nhóm QA" className="input-premium" /></label>
+              <button disabled={createWorkspace.isPending || !workspaceName.trim()} className="btn-secondary w-full">{createWorkspace.isPending ? 'Đang tạo…' : 'Tạo không gian làm việc'}</button>
+              {createWorkspace.isError && <p role="alert" className="text-xs text-rose-600">{createWorkspace.error.message}</p>}
+            </form>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -146,6 +157,7 @@ export default function App() {
       <Toaster position="top-right" toastOptions={{ className: 'text-sm font-medium' }} />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/" element={<RequireAuth />}>
           <Route index element={<ProjectRedirect />} />
           <Route path="projects" element={<ProjectSelection />} />
@@ -154,6 +166,10 @@ export default function App() {
           <Route path="projects/:projectId/settings" element={<ProjectSettings />} />
           <Route path="projects/:projectId/tests" element={<TestBuilder />} />
           <Route path="projects/:projectId/schedules" element={<TestSchedules />} />
+          <Route path="projects/:projectId/datasets" element={<Datasets />} />
+          <Route path="projects/:projectId/versions" element={<SpecVersions />} />
+          <Route path="projects/:projectId/runs" element={<TestRuns />} />
+          <Route path="projects/:projectId/runs/compare" element={<RunCompare />} />
           <Route path="projects/:projectId/analytics" element={<AnalyticsDashboard />} />
           <Route path="projects/:projectId/runs/:runId" element={<TestRunExecution />} />
           <Route path="test-runs/:runId" element={<TestRunExecution />} />

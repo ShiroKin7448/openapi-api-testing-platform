@@ -98,6 +98,8 @@ model Project {
   testRuns     TestRun[]
   testSchedules TestSchedule[]
   apiTokens    ProjectApiToken[]
+  datasets     TestDataset[]
+  specVersions SpecVersion[]
 }
 
 model ProjectApiToken {
@@ -174,7 +176,9 @@ model TestCase {
   pathParams       Json?
   headers          Json?
   expectedResponse Json?
-  
+  assertions       Json?          // Custom assertions: [{ expression: string, description?: string }]
+  datasetId        String?        // Data-driven testing: iterate this case over dataset rows
+
   // Version Safety
   originalPayload  Json?
   version          Int            @default(1)
@@ -185,7 +189,43 @@ model TestCase {
   updatedAt        DateTime       @updatedAt
 
   endpoint    Endpoint     @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  dataset     TestDataset? @relation(fields: [datasetId], references: [id], onDelete: SetNull)
   testResults TestResult[]
+}
+
+model TestDataset {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  format    String   // csv | json
+  columns   Json     // string[]
+  rows      Json     // Array<Record<string, string | number | boolean | null>>
+  rowCount  Int      @default(0)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testCases TestCase[]
+
+  @@index([projectId])
+}
+
+model SpecVersion {
+  id                String   @id @default(uuid())
+  projectId         String
+  openapiVersion    String
+  apiVersion        String?
+  title             String?
+  contentHash       String
+  normalizedContent Json
+  endpointCount     Int      @default(0)
+  createdBy         String?
+  createdAt         DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 model TestRunEvent {
@@ -202,6 +242,7 @@ model TestRunEvent {
   testRun TestRun @relation(fields: [testRunId], references: [id], onDelete: Cascade)
 
   @@index([testRunId, sequence])
+  @@index([createdAt])
 }
 
 model TestRun {
@@ -228,11 +269,14 @@ model TestRun {
   environment Environment  @relation(fields: [environmentId], references: [id], onDelete: Cascade)
   testResults TestResult[]
   events      TestRunEvent[]
+
+  @@index([projectId, createdAt])
 }
 
 model TestSchedule {
   id            String           @id @default(uuid())
   projectId     String
+  name          String?
   environmentId String
   testCaseIds   Json?
   interval      ScheduleInterval @default(ONCE)
@@ -241,6 +285,8 @@ model TestSchedule {
   createdBy     String
   lastRunAt     DateTime?
   nextRunAt     DateTime?
+  lastRunId     String?
+  lastError     String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 

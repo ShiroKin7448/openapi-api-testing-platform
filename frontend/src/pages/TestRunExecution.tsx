@@ -28,6 +28,10 @@ import {
 import { testrunsApi, type TestRunResultDto } from '../api/testruns.api';
 import { queryKeys } from '../api/queryClient';
 import { apiErrorMessage } from '../api/errors';
+import { environmentsApi } from '../api/environments.api';
+import ExportMenu from '../components/ExportMenu';
+import RunResultExtras from '../components/RunResultExtras';
+import { GitCompare } from 'lucide-react';
 
 function buildCurlCommand(job: TestRunResultDto): string {
   const { testCase } = job;
@@ -237,6 +241,9 @@ export default function TestRunExecution() {
   const pendingCount = Math.max(0, total - (passedCount + failedCount));
 
   const resolvedProjectId = projectId || run.data?.projectId || '';
+  const environments = useQuery({ queryKey: queryKeys.environments(resolvedProjectId), queryFn: () => environmentsApi.list(resolvedProjectId), enabled: Boolean(resolvedProjectId) });
+  const environmentName = environments.data?.find((env) => env.id === run.data?.environmentId)?.name;
+  const previousRunId = useQuery({ queryKey: queryKeys.projectRuns(resolvedProjectId), queryFn: () => testrunsApi.list(resolvedProjectId), enabled: Boolean(resolvedProjectId) }).data?.filter((item) => item.id !== runId && item.status !== 'CREATED' && new Date(item.createdAt).getTime() < new Date(run.data?.createdAt ?? Date.now()).getTime())[0]?.id;
   const runStatus = progress.data?.status ?? run.data?.status ?? 'PENDING';
   const currentLevelIndex = progress.data?.currentLevel ?? run.data?.currentLevel ?? 0;
 
@@ -397,7 +404,7 @@ export default function TestRunExecution() {
                 <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                   <span>Mức thực thi: <strong className="text-slate-700 dark:text-slate-300">Level {currentLevelIndex}</strong></span>
                   <span>•</span>
-                  <span>Môi trường ID: <code className="font-mono text-[11px] bg-slate-100 dark:bg-dark-900 px-1 py-0.5 rounded">{run.data.environmentId?.slice(0, 8) || 'Mặc định'}</code></span>
+                  <span>Môi trường: <strong className="text-slate-700 dark:text-slate-300">{environmentName ?? run.data.environmentId?.slice(0, 8) ?? 'Mặc định'}</strong></span>
                 </p>
               </div>
 
@@ -421,6 +428,12 @@ export default function TestRunExecution() {
                   >
                     {cancelRun.isPending ? 'Đang hủy...' : 'Hủy lượt chạy'}
                   </button>
+                )}
+                <ExportMenu runId={runId} disabled={runStatus === 'CREATED'} />
+                {resolvedProjectId && previousRunId && isTerminal(runStatus) && (
+                  <Link to={`/projects/${resolvedProjectId}/runs/compare?base=${previousRunId}&head=${runId}`} className="btn-secondary btn-sm sm:px-4 sm:py-2" title="So sánh với lượt chạy ngay trước">
+                    <GitCompare className="h-4 w-4" />So sánh lượt trước
+                  </Link>
                 )}
                 {resolvedProjectId && (
                   <Link
@@ -986,6 +999,8 @@ export default function TestRunExecution() {
                   </div>
                 )}
               </div>
+
+              <RunResultExtras result={selectedResult} />
 
               {/* Request Details */}
               {(() => {

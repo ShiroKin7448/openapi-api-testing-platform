@@ -42,7 +42,7 @@ export class OrchestratorService {
     const hasFailures = completedJobs.some(job => job.status === 'FAILED');
     if (hasFailures) {
       await prisma.testRun.update({ where: { id: testRunId }, data: { status: 'FAILED' } });
-      throw new AppError(`Run halted: One or more jobs failed at execution level ${levelIndex}.`, 400);
+      throw new AppError(`Dừng ở cấp ${levelIndex + 1}: có ca kiểm thử không đạt nên các API phụ thuộc phía sau không được chạy.`, 400);
     }
 
     // 2. Are we done?

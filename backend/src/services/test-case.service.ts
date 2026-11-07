@@ -4,6 +4,23 @@ import { DataGeneratorService } from './data-generator.service';
 import { NegativeGeneratorService } from './negative-generator.service';
 import { DependencyEdge, NormalizedEndpoint, Mutation } from '@shared/types';
 import { AppError } from '../utils/AppError';
+import { assertionService, parseAssertions } from './assertion.service';
+
+export type TestCaseUpdateInput = {
+  name?: string; description?: string | null; payload?: unknown; requestBody?: unknown; queryParams?: unknown; pathParams?: unknown;
+  headers?: unknown; expectedResponse?: unknown; expectedStatus?: number; enabled?: boolean; status?: string;
+  assertions?: Array<{ expression: string; description?: string }>; datasetId?: string | null;
+};
+
+/** Throws a 400 with the offending expression when an assertion cannot be parsed. */
+export function validateAssertionList(assertions: Array<{ expression: string }>): void {
+  assertions.forEach((assertion, index) => {
+    try { assertionService.validateSyntax(assertion.expression); }
+    catch (error) {
+      throw new AppError(`Điều kiện #${index + 1} không hợp lệ: ${error instanceof Error ? error.message : 'lỗi cú pháp'}`, 400, true, 'INVALID_ASSERTION');
+    }
+  });
+}
 
 export type TestCaseKind = 'VALID' | 'BOUNDARY' | 'NEGATIVE';
 export interface TestCaseDto {
@@ -19,6 +36,8 @@ export interface TestCaseDto {
   headers: Prisma.JsonValue | null;
   expectedStatus: number | null;
   expectedResponse: Prisma.JsonValue | null;
+  assertions: Array<{ expression: string; description?: string }>;
+  datasetId: string | null;
   enabled: boolean;
   status: string;
   mutation: Prisma.JsonValue | null;
@@ -49,6 +68,8 @@ export function testCaseDto(row: PrismaTestCase): TestCaseDto {
   return { id: row.id, endpointId: row.endpointId, type: kind, name: row.name, description: row.description,
     payload: row.requestBody, requestBody: row.requestBody, queryParams: row.queryParams, pathParams: row.pathParams, headers: row.headers,
     expectedStatus: statusFrom(row.expectedResponse), expectedResponse: row.expectedResponse, enabled: extended.enabled ?? true,
+    assertions: parseAssertions((row as PrismaTestCase & { assertions?: unknown }).assertions),
+    datasetId: (row as PrismaTestCase & { datasetId?: string | null }).datasetId ?? null,
     status: extended.status ?? 'READY', mutation: extended.mutation ?? null,
     originalPayload: extended.originalPayload ?? null, version: extended.version ?? 1, modifiedBy: extended.modifiedBy ?? null, modifiedAt: extended.modifiedAt ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt };
@@ -156,7 +177,9 @@ export class TestCaseService {
   }
 
   async listByProject(projectId: string): Promise<TestCaseDto[]> {
-    const rows = await prisma.testCase.findMany({ where: { endpoint: { spec: { projectId } } }, orderBy: { createdAt: 'asc' } });
+    const activeSpec = await prisma.openAPISpec.findFirst({ where: { projectId }, orderBy: { createdAt: 'desc' }, select: { id: true } });
+    if (!activeSpec) return [];
+    const rows = await prisma.testCase.findMany({ where: { endpoint: { specId: activeSpec.id } }, orderBy: { createdAt: 'asc' } });
     return rows.map(testCaseDto);
   }
 
@@ -165,12 +188,29 @@ export class TestCaseService {
     return row ? testCaseDto(row) : null;
   }
 
-  async update(id: string, updates: { name?: string; payload?: unknown; expectedStatus?: number; enabled?: boolean; status?: string }, userId?: string): Promise<TestCaseDto> {
+  async update(id: string, updates: TestCaseUpdateInput, userId?: string): Promise<TestCaseDto> {
     const data: Prisma.TestCaseUpdateInput = { version: { increment: 1 }, modifiedAt: new Date() };
     if (userId) data.modifiedBy = userId;
     if (updates.name !== undefined) data.name = updates.name;
+    if (updates.description !== undefined) data.description = updates.description;
     if (updates.payload !== undefined) data.requestBody = inputJson(updates.payload);
-    if (updates.expectedStatus !== undefined) data.expectedResponse = { statusCode: String(updates.expectedStatus) };
+    if (updates.requestBody !== undefined) data.requestBody = inputJson(updates.requestBody);
+    if (updates.queryParams !== undefined) data.queryParams = inputJson(updates.queryParams);
+    if (updates.pathParams !== undefined) data.pathParams = inputJson(updates.pathParams);
+    if (updates.headers !== undefined) data.headers = inputJson(updates.headers);
+    if (updates.expectedResponse !== undefined) data.expectedResponse = inputJson(updates.expectedResponse);
+    if (updates.expectedStatus !== undefined) {
+      const current = await prisma.testCase.findUnique({ where: { id }, select: { expectedResponse: true } });
+      const base = current?.expectedResponse && typeof current.expectedResponse === 'object' && !Array.isArray(current.expectedResponse) ? current.expectedResponse as Record<string, unknown> : {};
+      data.expectedResponse = inputJson({ ...base, ...(updates.expectedResponse && typeof updates.expectedResponse === 'object' ? updates.expectedResponse as Record<string, unknown> : {}), statusCode: String(updates.expectedStatus) });
+    }
+    if (updates.assertions !== undefined) {
+      validateAssertionList(updates.assertions);
+      data.assertions = inputJson(updates.assertions.map((item) => ({ expression: item.expression.trim(), ...(item.description ? { description: item.description } : {}) })));
+    }
+    if (updates.datasetId !== undefined) {
+      data.dataset = updates.datasetId ? { connect: { id: updates.datasetId } } : { disconnect: true };
+    }
     if (updates.enabled !== undefined) (data as Prisma.TestCaseUpdateInput & { enabled: boolean }).enabled = updates.enabled;
     if (updates.status !== undefined) data.status = updates.status as any;
     return testCaseDto(await prisma.testCase.update({ where: { id }, data }));
@@ -194,6 +234,8 @@ export class TestCaseService {
       queryParams: source.queryParams ?? Prisma.JsonNull,
       headers: source.headers ?? Prisma.JsonNull,
       expectedResponse: source.expectedResponse ?? Prisma.JsonNull,
+      assertions: (source as PrismaTestCase & { assertions?: Prisma.JsonValue }).assertions ?? Prisma.JsonNull,
+      datasetId: (source as PrismaTestCase & { datasetId?: string | null }).datasetId ?? null,
       mutation: extended.mutation ?? Prisma.JsonNull,
       originalPayload: source.originalPayload ?? Prisma.JsonNull,
       modifiedBy: userId ?? null,

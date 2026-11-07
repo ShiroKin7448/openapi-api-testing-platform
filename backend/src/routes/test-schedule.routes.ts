@@ -10,6 +10,7 @@ const controller = new TestScheduleController();
 router.post('/projects/:projectId/schedules', requireAuth, validateRequest({ params: projectParams, body: createTestScheduleBody, query: noQueryParams }), controller.createSchedule);
 router.get('/projects/:projectId/schedules', requireAuth, validateRequest({ params: projectParams, query: noQueryParams }), controller.listProjectSchedules);
 router.patch('/schedules/:scheduleId', requireAuth, validateRequest({ params: scheduleIdParams, body: updateTestScheduleBody, query: noQueryParams }), controller.updateSchedule);
+router.post('/schedules/:scheduleId/run', requireAuth, validateRequest({ params: scheduleIdParams, query: noQueryParams }), controller.runNow);
 router.delete('/schedules/:scheduleId', requireAuth, validateRequest({ params: scheduleIdParams, query: noQueryParams }), controller.deleteSchedule);
 
 export default router;

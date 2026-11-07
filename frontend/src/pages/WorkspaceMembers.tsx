@@ -24,7 +24,7 @@ const ROLE_META: Record<WorkspaceRole, { label: string; description: string; col
   },
   [WorkspaceRole.ADMIN]: {
     label: 'Admin',
-    description: 'Manage projects, environments, test cases, run tests, view analytics',
+    description: 'Quản lý dự án, môi trường, kịch bản, chạy kiểm thử và xem báo cáo',
     colorClass: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300',
     icon: ShieldCheck,
   },
@@ -164,7 +164,7 @@ export default function WorkspaceMembers() {
       setInviteError('');
       void queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
     },
-    onError: (err: unknown) => setInviteError(apiErrorMessage(err, 'Failed to invite member.')),
+    onError: (err: unknown) => setInviteError(apiErrorMessage(err, 'Không mời được thành viên.')),
   });
 
   const updateRoleMutation = useMutation({
@@ -172,29 +172,29 @@ export default function WorkspaceMembers() {
       workspacesApi.updateMember(workspaceId, memberId, role),
     onSuccess: () => {
       setEditingMemberId(null);
-      toast.success('Member role updated successfully');
+      toast.success('Đã cập nhật vai trò thành viên');
       void queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
     },
-    onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Failed to update role.')),
+    onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Không cập nhật được vai trò.')),
   });
 
   const removeMutation = useMutation({
     mutationFn: (memberId: string) => workspacesApi.removeMember(workspaceId, memberId),
     onSuccess: () => {
-      toast.success('Member removed successfully');
+      toast.success('Đã xóa thành viên');
       void queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
     },
-    onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Failed to remove member.')),
+    onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Không xóa được thành viên.')),
   });
 
   const transferMutation = useMutation({
     mutationFn: (userId: string) => workspacesApi.transferOwnership(workspaceId, userId),
     onSuccess: () => {
-      toast.success('Ownership transferred. You are now an Admin.');
+      toast.success('Đã chuyển quyền sở hữu. Bạn hiện là Quản trị viên.');
       void queryClient.invalidateQueries({ queryKey: queryKeys.members(workspaceId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
     },
-    onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Failed to transfer ownership.')),
+    onError: (err: unknown) => toast.error(apiErrorMessage(err, 'Không chuyển được quyền sở hữu.')),
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ export default function WorkspaceMembers() {
               disabled={inviteMutation.isPending || !inviteEmail}
               className="btn-primary px-4 py-2 text-xs font-semibold disabled:opacity-50"
             >
-              {inviteMutation.isPending ? 'Inviting…' : 'Send Invite'}
+              {inviteMutation.isPending ? 'Inviting…' : 'Gửi lời mời'}
             </button>
           </form>
           {inviteError && (
@@ -340,9 +340,9 @@ export default function WorkspaceMembers() {
         </div>
 
         {membersQuery.isLoading ? (
-          <div className="p-8 text-center text-sm text-slate-400 animate-pulse">Loading members…</div>
+          <div className="p-8 text-center text-sm text-slate-400 animate-pulse">Đang tải thành viên…</div>
         ) : members.length === 0 ? (
-          <div className="p-8 text-center text-sm text-slate-400">No members found.</div>
+          <div className="p-8 text-center text-sm text-slate-400">Không tìm thấy thành viên nào.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -449,7 +449,7 @@ export default function WorkspaceMembers() {
                                 id={`transfer-ownership-${member.id}`}
                                 onClick={() => handleTransferOwnership(member)}
                                 disabled={transferMutation.isPending}
-                                title="Transfer ownership to this member"
+                                title="Chuyển quyền sở hữu cho thành viên này"
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50"
                               >
                                 <ArrowRightLeft className="w-4 h-4" />
@@ -460,7 +460,7 @@ export default function WorkspaceMembers() {
                                 id={`remove-member-${member.id}`}
                                 onClick={() => handleRemove(member)}
                                 disabled={removeMutation.isPending}
-                                title="Remove member"
+                                title="Xóa thành viên"
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors disabled:opacity-50"
                               >
                                 <Trash2 className="w-4 h-4" />

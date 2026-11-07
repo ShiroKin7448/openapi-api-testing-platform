@@ -64,7 +64,21 @@ export const testCasePatchBody = z.object({
   expectedStatus: z.number().int().min(100).max(599).optional(),
   enabled: z.boolean().optional(),
   status: z.enum(['DRAFT', 'READY', 'DISABLED', 'ARCHIVED']).optional(),
+  assertions: z.array(z.object({
+    expression: z.string().trim().min(1).max(500),
+    description: z.string().trim().max(200).optional(),
+  }).strict()).max(30).optional(),
+  datasetId: idSchema.nullable().optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+export const assertionPreviewBody = z.object({
+  expressions: z.array(z.string().max(500)).min(1).max(30),
+  sample: z.object({
+    status: z.number().int().optional(),
+    headers: z.record(z.string(), z.unknown()).optional(),
+    body: z.unknown().optional(),
+    responseTime: z.number().optional(),
+  }).strict().optional(),
+}).strict();
 export const testCaseBulkStatusBody = z.object({
   ids: z.array(idSchema).min(1),
   status: z.enum(['DRAFT', 'READY', 'DISABLED', 'ARCHIVED']),
@@ -92,16 +106,17 @@ export const analyticsQuery = z.object({
 }).strict().refine((value) => !value.from || !value.to || value.from <= value.to, { message: 'from must be before or equal to to' });
 
 export const scheduleIdParams = z.object({ scheduleId: idSchema });
-export const createTestScheduleBody = z.object({
+const scheduleFields = {
+  name: z.string().trim().max(120).nullable().optional(),
   environmentId: idSchema,
-  testCaseIds: z.array(idSchema).optional(),
+  testCaseIds: z.array(idSchema).max(2000).nullable().optional(),
   interval: z.enum(['ONCE', 'DAILY', 'WEEKLY', 'CUSTOM']).optional(),
-  cron: z.string().optional(),
+  cron: z.string().trim().max(120).nullable().optional(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Giờ phải có dạng HH:mm').optional(),
+  weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional(),
+  runAt: z.string().datetime({ offset: true }).nullable().optional(),
   enabled: z.boolean().optional(),
-}).strict();
-export const updateTestScheduleBody = z.object({
-  enabled: z.boolean().optional(),
-  cron: z.string().optional(),
-  interval: z.enum(['ONCE', 'DAILY', 'WEEKLY', 'CUSTOM']).optional(),
-  testCaseIds: z.array(idSchema).optional(),
-}).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+};
+export const createTestScheduleBody = z.object(scheduleFields).strict();
+export const updateTestScheduleBody = z.object({ ...scheduleFields, environmentId: idSchema.optional() })
+  .strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');

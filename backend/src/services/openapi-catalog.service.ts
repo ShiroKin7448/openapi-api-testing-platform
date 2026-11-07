@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { specVersionService } from './spec-diff.service';
 import { createHash } from 'crypto';
 import { DependencyGraph, EndpointCatalogItem, ExecutionPlan, ImportSpecResult, NormalizedEndpoint, NormalizedOpenAPIDocument, RiskFactor, SpecFlowResponse, WorkspaceRole } from '@shared/types';
 import { AppError } from '../utils/AppError';
@@ -186,8 +187,9 @@ export class OpenApiCatalogService {
     const contentHash = createHash('sha256').update(canonicalJson(content)).digest('hex');
 
     try {
-      // Clean up previous specs for this project to eliminate duplicate endpoints
-      await prisma.openAPISpec.deleteMany({ where: { projectId } });
+      // Previous specs are intentionally KEPT: their test cases own the results of past runs
+      // (reports, run comparison, history). Every feature works on the most recent spec only.
+      const previousSpec = await prisma.openAPISpec.findFirst({ where: { projectId }, orderBy: { createdAt: 'desc' }, select: { id: true } });
 
       // Auto-create default environment if project has none
       const envCount = await prisma.environment.count({ where: { projectId } });
@@ -243,6 +245,17 @@ export class OpenApiCatalogService {
         }
       }
 
+      if (previousSpec) {
+        try { await carryOverCustomizations(previousSpec.id, persisted.spec.id); }
+        catch (carryErr) { console.warn('[importSpec] Could not carry over assertions/datasets:', carryErr); }
+      }
+
+      try {
+        await specVersionService.record(projectId, { openapiVersion: imported.version, normalized: imported.normalized, createdBy: userId });
+      } catch (versionErr) {
+        console.warn('[importSpec] Could not record spec version history:', versionErr);
+      }
+
       return {
         created: true,
         result: { specId: persisted.spec.id, version: persisted.spec.version, endpointCount: persisted.endpoints.length, endpoints: persisted.endpoints },
@@ -255,6 +268,11 @@ export class OpenApiCatalogService {
             where: { projectId, contentHash }, include: { endpoints: { orderBy: { riskScore: 'desc' } } },
           });
           if (duplicate) {
+            // Re-importing an older document makes it the active spec again (its test cases and edits are preserved).
+            await prisma.openAPISpec.update({ where: { id: duplicate.id }, data: { createdAt: new Date() } });
+            try {
+              await specVersionService.record(projectId, { openapiVersion: imported.version, normalized: imported.normalized, createdBy: userId });
+            } catch { /* history is best-effort */ }
             return {
               created: false,
               result: {
@@ -287,8 +305,9 @@ export class OpenApiCatalogService {
 
   async getSpecs(userId: string, projectId: string) {
     await this.projectAccess(userId, projectId, ALL_MEMBER_ROLES);
+    // Only the active (most recent) spec is exposed; older versions live in the spec version history.
     const specs = await prisma.openAPISpec.findMany({
-      where: { projectId }, orderBy: { createdAt: 'desc' },
+      where: { projectId }, orderBy: { createdAt: 'desc' }, take: 1,
       select: { id: true, projectId: true, version: true, createdAt: true, updatedAt: true, _count: { select: { endpoints: true } } },
     });
     return specs.map((spec) => ({ specId: spec.id, projectId: spec.projectId, version: spec.version, createdAt: spec.createdAt, updatedAt: spec.updatedAt, endpointCount: spec._count.endpoints }));
@@ -385,5 +404,29 @@ export class OpenApiCatalogService {
     if (!spec) throw new AppError('OpenAPI specification not found', 404, true, 'SPEC_NOT_FOUND');
     await workspaceService.requireRole(userId, spec.project.workspaceId, [WorkspaceRole.OWNER]);
     await prisma.openAPISpec.delete({ where: { id: specId } });
+  }
+}
+
+/**
+ * Copies user-authored assertions and dataset bindings from the previous spec's test cases to the
+ * freshly generated ones (matched by METHOD + path + test case name), so re-importing does not lose work.
+ */
+async function carryOverCustomizations(previousSpecId: string, nextSpecId: string): Promise<void> {
+  const [previous, next] = await Promise.all([
+    prisma.testCase.findMany({ where: { endpoint: { specId: previousSpecId } }, select: { name: true, assertions: true, datasetId: true, endpoint: { select: { method: true, path: true } } } }),
+    prisma.testCase.findMany({ where: { endpoint: { specId: nextSpecId } }, select: { id: true, name: true, endpoint: { select: { method: true, path: true } } } }),
+  ]);
+  const key = (item: { name: string; endpoint: { method: string; path: string } }) => `${item.endpoint.method.toUpperCase()} ${item.endpoint.path} :: ${item.name}`;
+  const byKey = new Map(previous.filter((item) => item.assertions !== null || item.datasetId).map((item) => [key(item), item]));
+  for (const testCase of next) {
+    const source = byKey.get(key(testCase));
+    if (!source) continue;
+    await prisma.testCase.update({
+      where: { id: testCase.id },
+      data: {
+        ...(source.assertions !== null ? { assertions: source.assertions as Prisma.InputJsonValue } : {}),
+        ...(source.datasetId ? { datasetId: source.datasetId } : {}),
+      },
+    });
   }
 }

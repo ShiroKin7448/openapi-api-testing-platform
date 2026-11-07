@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { TestCaseController } from '../controllers/test-case.controller';
+import { TestCaseController, previewAssertions } from '../controllers/test-case.controller';
 import { requireAuth } from '../middlewares/requireAuth';
 import { validateRequest } from '../middlewares/validateRequest';
-import { noQueryParams, testCaseIdParams, endpointIdParams, projectParams, testCasePatchBody, testCaseBulkStatusBody } from '../validation/api.schemas';
+import { noQueryParams, testCaseIdParams, endpointIdParams, projectParams, testCasePatchBody, testCaseBulkStatusBody, assertionPreviewBody } from '../validation/api.schemas';
 
 const router = Router();
 const controller = new TestCaseController();
@@ -15,4 +15,5 @@ router.patch('/test-cases/bulk/status', requireAuth, validateRequest({ body: tes
 router.patch('/test-cases/:testCaseId', requireAuth, validateRequest({ params: testCaseIdParams, body: testCasePatchBody, query: noQueryParams }), controller.updateTestCase);
 router.post('/test-cases/:testCaseId/clone', requireAuth, validateRequest({ params: testCaseIdParams, body: z.any(), query: noQueryParams }), controller.cloneTestCase);
 router.delete('/test-cases/:testCaseId', requireAuth, validateRequest({ params: testCaseIdParams, query: noQueryParams }), controller.deleteTestCase);
+router.post('/assertions/preview', requireAuth, validateRequest({ body: assertionPreviewBody, query: noQueryParams }), previewAssertions);
 export default router;

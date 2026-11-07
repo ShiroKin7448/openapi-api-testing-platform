@@ -11,7 +11,7 @@ export class MetricsService {
   async getProjectEndpointCount(projectId: string): Promise<number> {
     const activeSpec = await prisma.openAPISpec.findFirst({
       where: { projectId },
-      orderBy: { version: 'desc' },
+      orderBy: { createdAt: 'desc' },
       select: { _count: { select: { endpoints: true } } },
     });
     return activeSpec?._count.endpoints ?? 0;

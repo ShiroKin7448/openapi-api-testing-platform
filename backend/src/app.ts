@@ -13,9 +13,14 @@ import analyticsRoutes from './routes/analytics.routes';
 import testScheduleRoutes from './routes/test-schedule.routes';
 import projectApiTokenRoutes from './routes/project-api-token.routes';
 import ciRoutes from './routes/ci.routes';
+import datasetRoutes from './routes/dataset.routes';
+import maintenanceRoutes from './routes/maintenance.routes';
+import { apiLimiter } from './middlewares/rateLimit';
 import { AppError } from './utils/AppError';
 
 const app = express();
+// Behind nginx / a load balancer the client IP comes from X-Forwarded-For (needed for per-IP rate limits).
+if (process.env.TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY === 'true');
 
 // Middlewares
 app.use(requestCorrelation);
@@ -29,6 +34,7 @@ app.get('/health', (_req, res) => {
 });
 
 const api = express.Router();
+api.use(apiLimiter);
 api.use('/auth', authRoutes);
 api.use('/workspaces', workspaceRoutes);
 api.use('/workspaces', workspaceProjectRoutes);
@@ -43,6 +49,8 @@ api.use(testScheduleRoutes);
 api.use(analyticsRoutes);
 api.use(projectApiTokenRoutes);
 api.use(ciRoutes);
+api.use(datasetRoutes);
+api.use(maintenanceRoutes);
 
 app.use('/api', api);
 

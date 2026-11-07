@@ -1,0 +1,20 @@
+// Jenkinsfile mẫu: chạy API Test Auto và hiển thị kết quả JUnit trên Jenkins.
+// Cần tạo credentials kiểu "Secret text": api-test-token. Cần cài plugin JUnit và jq trên agent.
+pipeline {
+  agent any
+  environment {
+    API_TEST_URL        = 'https://apitest.example.com'
+    API_TEST_PROJECT_ID = '<project-id>'
+    API_TEST_TOKEN      = credentials('api-test-token')
+  }
+  stages {
+    stage('API Tests') {
+      steps {
+        sh 'bash examples/ci/run-api-tests.sh'
+      }
+    }
+  }
+  post {
+    always { junit allowEmptyResults: true, testResults: 'junit.xml' }
+  }
+}

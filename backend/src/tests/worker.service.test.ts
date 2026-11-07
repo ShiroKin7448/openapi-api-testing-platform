@@ -53,7 +53,8 @@ describe('WorkerService - Strict Retry Policy', () => {
       expect.anything(),
       expect.objectContaining({ status: 200 }),
       '200',
-      expect.anything()
+      expect.anything(),
+      expect.objectContaining({ assertions: [] })
     );
     expect(axios).toHaveBeenCalledWith(expect.objectContaining({ maxRedirects: 0 }));
   });
@@ -99,7 +100,8 @@ describe('WorkerService - Strict Retry Policy', () => {
       expect.anything(),
       expect.objectContaining({ status: 400, data: { error: 'Bad Request' } }),
       '200',
-      expect.anything()
+      expect.anything(),
+      expect.objectContaining({ assertions: [] })
     );
   });
 

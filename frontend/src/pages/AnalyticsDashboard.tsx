@@ -68,8 +68,8 @@ export default function AnalyticsDashboard() {
     if (!data || !summary) return;
     const rows: Array<Array<string | number>> = [
       ['Metric', 'Value'],
-      ['Total runs in history', summary.totalRuns],
-      ['Total tests', summary.totalTests],
+      ['Tổng số lượt chạy', summary.totalRuns],
+      ['Tổng số ca', summary.totalTests],
       ['Passed', summary.passed],
       ['Failed', summary.failed],
       ['Pass rate (%)', summary.passRate.toFixed(1)],
@@ -80,9 +80,9 @@ export default function AnalyticsDashboard() {
       ['Negative test coverage (%)', data.coverage.negative.toFixed(1)],
       ['Median response time (ms)', data.performance.median],
       ['P95 response time (ms)', data.performance.p95],
-      ['Performance regression', data.performance.regression ? 'Yes' : 'No'],
+      ['Suy giảm hiệu năng', data.performance.regression ? 'Yes' : 'No'],
       [],
-      ['Latest run failures', ''],
+      ['Lỗi ở lượt gần nhất', ''],
       ['Method', 'Path', 'Name', 'Type', 'Status', 'HTTP status'],
       ...(runAnalytics.data?.failedResults.map((failure) => [
         failure.endpoint.method, failure.endpoint.path, failure.name, failure.type, failure.status, failure.responseStatus ?? '',
@@ -95,7 +95,7 @@ export default function AnalyticsDashboard() {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white">Bước 4: Báo cáo Chất lượng & Phân tích</h1>
+          <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white">Báo cáo & phân tích</h1>
           <p className="text-xs text-slate-500 mt-1">Số liệu phân tích được tính toán tự động từ các lượt chạy kiểm thử đã lưu của dự án.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

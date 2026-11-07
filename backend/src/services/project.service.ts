@@ -51,7 +51,8 @@ export class ProjectService {
     const [openApiCount, environmentCount, testCaseCount] = await Promise.all([
       prisma.openAPISpec.count({ where: { projectId } }),
       prisma.environment.count({ where: { projectId } }),
-      prisma.testCase.count({ where: { endpoint: { spec: { projectId } } } })
+      prisma.openAPISpec.findFirst({ where: { projectId }, orderBy: { createdAt: 'desc' }, select: { id: true } })
+        .then((spec) => spec ? prisma.testCase.count({ where: { endpoint: { specId: spec.id } } }) : 0)
     ]);
 
     const hasOpenApi = openApiCount > 0;

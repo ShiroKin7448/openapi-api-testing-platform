@@ -11,6 +11,7 @@ jest.mock('../utils/prisma', () => ({
     workspaceMember: { findUnique: jest.fn() },
     project: { findUnique: jest.fn() },
     endpoint: { findUnique: jest.fn() },
+    openAPISpec: { findFirst: jest.fn() },
     testCase: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
   },
 }));
@@ -60,8 +61,11 @@ beforeEach(() => {
     cases.set(id, row);
     return row;
   });
-  method('testCase', 'findMany').mockImplementation(async (args: { where: { endpointId?: string; endpoint?: { spec?: { projectId?: string } } } }) => [...cases.values()].filter((row) => {
+  // Each project's active spec id is modelled as `spec-<projectId>`; only projectA has endpoints.
+  method('openAPISpec', 'findFirst').mockImplementation(async (args: { where: { projectId: string } }) => ({ id: `spec-${args.where.projectId}` }));
+  method('testCase', 'findMany').mockImplementation(async (args: { where: { endpointId?: string; endpoint?: { specId?: string; spec?: { projectId?: string } } } }) => [...cases.values()].filter((row) => {
     if (args.where.endpointId) return row.endpointId === args.where.endpointId;
+    if (args.where.endpoint?.specId) return `spec-${endpoints.get(String(row.endpointId))?.spec.projectId}` === args.where.endpoint.specId;
     if (args.where.endpoint?.spec?.projectId) return endpoints.get(String(row.endpointId))?.spec.projectId === args.where.endpoint.spec.projectId;
     return false;
   }));

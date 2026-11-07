@@ -59,4 +59,10 @@ export const queryKeys = {
   schedules: (projectId: string) => ['projects', projectId, 'schedules'] as const,
   auditLog: (workspaceId: string, page: number) => ['workspaces', workspaceId, 'audit-log', page] as const,
   apiTokens: (projectId: string) => ['projects', projectId, 'api-tokens'] as const,
+  datasets: (projectId: string) => ['projects', projectId, 'datasets'] as const,
+  dataset: (datasetId: string) => ['datasets', datasetId] as const,
+  specVersions: (projectId: string) => ['projects', projectId, 'spec-versions'] as const,
+  specDiff: (projectId: string, base: string, head: string) => ['projects', projectId, 'spec-versions', 'diff', base, head] as const,
+  runCompare: (projectId: string, base: string, head: string, threshold: number) => ['projects', projectId, 'test-runs', 'compare', base, head, threshold] as const,
+  maintenance: (projectId: string) => ['projects', projectId, 'maintenance'] as const,
 };

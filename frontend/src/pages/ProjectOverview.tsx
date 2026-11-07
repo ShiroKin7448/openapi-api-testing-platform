@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { PageHeader } from '../components/ui';
+import { LayoutDashboard as LayoutDashboardIcon, GitBranch } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -81,44 +83,53 @@ export default function ProjectOverview() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="glass-panel p-6 bg-gradient-to-r from-primary-50/50 via-white to-indigo-50/50 dark:from-dark-900 dark:via-dark-900 dark:to-dark-850">
-        <div className="flex items-center space-x-2 mb-3"><h2 className="text-base font-bold text-slate-900 dark:text-white">Project Setup Checklist</h2></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          {[
-            { label: 'Import OpenAPI', done: readiness.data?.hasOpenApi, desc: 'Import an OpenAPI document to discover endpoints.' },
-            { label: 'Create Environment', done: readiness.data?.hasEnvironment, desc: 'Configure variables and base URL.' },
-            { label: 'Generate Test Cases', done: readiness.data?.hasTestCases, desc: 'Generate or write test cases for endpoints.' },
-            { label: 'Run Tests', done: (readiness.data?.canRunTests && (runs.data?.length ?? 0) > 0), desc: 'Execute the enabled cases against an environment.' }
-          ].map((step, index) => (
-            <div key={step.label} className={`p-3 rounded-xl border ${step.done ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-white dark:bg-dark-950 border-slate-200 dark:border-white/[0.08]'}`}>
-              <div className="flex items-center justify-between mb-1">
-                <span className={`font-bold ${step.done ? 'text-emerald-700 dark:text-emerald-400' : 'text-primary-600'}`}>Step {index + 1}: {step.label}</span>
-                {step.done && <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
-              </div>
-              <p className={step.done ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-slate-500'}>{step.desc}</p>
+      <PageHeader
+        icon={<LayoutDashboardIcon className="h-5 w-5" />}
+        eyebrow={specs.data?.[0] ? `OpenAPI ${specs.data[0].version} · ${endpoints.length} endpoint` : undefined}
+        title={project.isLoading ? 'Đang tải dự án…' : project.data?.name ?? 'Tổng quan dự án'}
+        description={project.data?.description || 'Nạp tài liệu API, hệ thống sẽ tự sinh kịch bản kiểm thử cho từng endpoint.'}
+        actions={<>
+          {readiness.data?.hasOpenApi && <Link to={`/projects/${projectId}/versions`} className="btn-secondary btn-sm sm:px-4 sm:py-2"><GitBranch className="h-4 w-4" />Phiên bản API</Link>}
+          <button onClick={() => setShowImport(true)} className={`${readiness.data?.hasOpenApi ? 'btn-secondary' : 'btn-primary'} btn-sm sm:px-4 sm:py-2`}><UploadCloud className="h-4 w-4" />{readiness.data?.hasOpenApi ? 'Nạp phiên bản mới' : 'Nạp tài liệu OpenAPI'}</button>
+        </>}
+      />
+
+      {(() => {
+        const steps = [
+          { label: 'Nạp tài liệu OpenAPI', done: Boolean(readiness.data?.hasOpenApi), desc: 'File Swagger/OpenAPI dạng JSON hoặc YAML.', action: () => setShowImport(true), to: undefined as string | undefined },
+          { label: 'Tạo môi trường', done: Boolean(readiness.data?.hasEnvironment), desc: 'Khai báo BASE_URL của máy chủ cần test.', to: `/projects/${projectId}/settings` },
+          { label: 'Xem lại kịch bản', done: Boolean(readiness.data?.hasTestCases), desc: 'Kịch bản được sinh tự động, bạn có thể chỉnh sửa.', to: `/projects/${projectId}/tests` },
+          { label: 'Chạy kiểm thử', done: Boolean(readiness.data?.canRunTests && (runs.data?.length ?? 0) > 0), desc: 'Bấm “Chạy kiểm thử” ở góc trên bên phải.', to: `/projects/${projectId}/runs` },
+        ];
+        const doneCount = steps.filter((step) => step.done).length;
+        if (doneCount === steps.length) return null;
+        return (
+          <section className="glass-panel p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div><h2 className="text-sm font-semibold">Bắt đầu nhanh</h2><p className="text-xs text-slate-500">Hoàn thành {doneCount}/{steps.length} bước để chạy kiểm thử đầu tiên.</p></div>
+              <div className="h-2 w-40 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${doneCount * 100 / steps.length}%` }} /></div>
             </div>
-          ))}
-        </div>
-      </div>
-      <div className="glass-panel p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div><span className="text-xs text-slate-500 font-mono">{project.isLoading ? 'Loading project…' : project.data?.name ?? 'Project'}{specs.data?.[0] ? ` • OpenAPI ${specs.data[0].version}` : ''}</span><h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">{project.data?.name ?? 'Project overview'}</h1><p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{project.data?.description ?? 'Manage imported endpoints and test cases.'}</p></div>
-        <div className="flex flex-wrap items-center gap-3">
-          {(!readiness.data?.hasOpenApi || readiness.data?.hasEnvironment) && (
-            <button onClick={() => setShowImport(true)} className={`${readiness.data?.hasOpenApi ? 'btn-secondary' : 'btn-primary'} py-3 px-5 text-sm font-semibold flex items-center gap-2`}><UploadCloud className="w-5 h-5" /><span>Import OpenAPI</span></button>
-          )}
-          {readiness.data?.hasOpenApi && !readiness.data?.hasEnvironment && (
-            <Link to={`/projects/${projectId}/settings`} className="btn-primary py-3 px-6 text-sm font-bold flex items-center gap-2"><span>Create Environment</span></Link>
-          )}
-          {readiness.data?.hasEnvironment && !readiness.data?.hasTestCases && (
-            <Link to={`/projects/${projectId}/tests`} className="btn-primary py-3 px-6 text-sm font-bold flex items-center gap-2"><Sparkles className="w-5 h-5" /><span>Generate Test Cases</span></Link>
-          )}
-          {readiness.data?.hasTestCases && (
-            <Link to={`/projects/${projectId}/tests`} className="btn-success py-3 px-6 text-sm font-bold flex items-center gap-2"><Play className="w-5 h-5" /><span>Run Tests</span></Link>
-          )}
-        </div>
-      </div>
-      {project.isError && <InlineError message={apiErrorMessage(project.error, 'Could not load the project.')} retry={() => void project.refetch()} />}
-      {(runs.isError || latestRunDetails.isError) && <InlineError message={apiErrorMessage(runs.error ?? latestRunDetails.error, 'Could not load run history.')} retry={() => { void runs.refetch(); void latestRunDetails.refetch(); }} />}
+            <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {steps.map((step, index) => {
+                const firstPending = steps.findIndex((item) => !item.done) === index;
+                const body = (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className={`grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${step.done ? 'bg-emerald-500 text-white' : firstPending ? 'bg-primary-600 text-white' : 'bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-300'}`}>{step.done ? '✓' : index + 1}</span>
+                      <span className={`text-sm font-semibold ${step.done ? 'text-emerald-700 line-through decoration-emerald-400/60 dark:text-emerald-400' : ''}`}>{step.label}</span>
+                    </div>
+                    <p className="mt-1 pl-8 text-xs text-slate-500">{step.desc}</p>
+                  </>
+                );
+                const className = `block rounded-xl border p-3 text-left transition-colors ${step.done ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/5' : firstPending ? 'border-primary-300 bg-primary-50/50 hover:bg-primary-50 dark:border-primary-500/40 dark:bg-primary-500/5' : 'border-slate-200 hover:bg-slate-50 dark:border-white/[0.08] dark:hover:bg-white/[0.02]'}`;
+                return <li key={step.label}>{step.to ? <Link to={step.to} className={className}>{body}</Link> : <button onClick={step.action} className={`${className} w-full`}>{body}</button>}</li>;
+              })}
+            </ol>
+          </section>
+        );
+      })()}
+      {project.isError && <InlineError message={apiErrorMessage(project.error, 'Không tải được dự án.')} retry={() => void project.refetch()} />}
+      {(runs.isError || latestRunDetails.isError) && <InlineError message={apiErrorMessage(runs.error ?? latestRunDetails.error, 'Không tải được lịch sử lượt chạy.')} retry={() => { void runs.refetch(); void latestRunDetails.refetch(); }} />}
       {showImport && <OpenAPIImport projectId={projectId} projectName={project.data?.name ?? projectId} onClose={() => setShowImport(false)} onSuccess={(_result: ImportSpecResult) => {
         void Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.specs(projectId) }),
@@ -129,10 +140,10 @@ export default function ProjectOverview() {
         ]);
       }} />}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat icon={<Code2 className="w-4 h-4" />} label="Endpoints" value={endpointsLoading ? '…' : String(endpoints.length)} detail={`${specs.data?.length ?? 0} imported specifications`} />
-        <Stat icon={<Sparkles className="w-4 h-4" />} label="Test cases" value={cases.isLoading ? '…' : String(cases.data?.length ?? 0)} detail={`${cases.data?.filter((item) => item.enabled).length ?? 0} enabled`} />
-        <Stat icon={<ShieldCheck className="w-4 h-4" />} label="Latest run passed" value={latestRunDetails.isLoading ? '…' : String(passed)} detail={`${failed} failed results`} />
-        <Stat icon={<Play className="w-4 h-4" />} label="Test runs" value={runs.isLoading ? '…' : String(runs.data?.length ?? 0)} detail={latestRun ? `Latest: ${latestRun.status}` : 'No runs yet'} />
+        <Stat icon={<Code2 className="w-4 h-4" />} label="Endpoint" value={endpointsLoading ? '…' : String(endpoints.length)} detail={`${specs.data?.length ?? 0} tài liệu đang dùng`} />
+        <Stat icon={<Sparkles className="w-4 h-4" />} label="Kịch bản kiểm thử" value={cases.isLoading ? '…' : String(cases.data?.length ?? 0)} detail={`${cases.data?.filter((item) => item.enabled).length ?? 0} đang bật`} />
+        <Stat icon={<ShieldCheck className="w-4 h-4" />} label="Đạt ở lượt gần nhất" value={latestRunDetails.isLoading ? '…' : String(passed)} detail={`${failed} ca không đạt`} />
+        <Stat icon={<Play className="w-4 h-4" />} label="Số lượt chạy" value={runs.isLoading ? '…' : String(runs.data?.length ?? 0)} detail={latestRun ? `Gần nhất: ${({ COMPLETED: 'Hoàn tất', FAILED: 'Thất bại', RUNNING: 'Đang chạy', CANCELLED: 'Đã hủy', CREATED: 'Mới tạo' } as Record<string, string>)[latestRun.status] ?? latestRun.status}` : 'Chưa chạy lần nào'} />
       </div>
       {/* Risk Analysis & Ranking Overview Card */}
       <div className="glass-panel p-5 bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-700/50 text-white shadow-xl">
@@ -166,19 +177,19 @@ export default function ProjectOverview() {
               <span>Rủi ro cao (≥ 70)</span>
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
             </span>
-            <div className="text-2xl font-black text-rose-400 mt-1">{riskStats.high} <span className="text-xs font-normal text-slate-400">APIs</span></div>
+            <div className="text-2xl font-black text-rose-400 mt-1">{riskStats.high} <span className="text-xs font-normal text-slate-400"> API</span></div>
             <span className="text-[10px] text-rose-300/80 mt-1">Ưu tiên kiểm thử cao nhất</span>
           </div>
 
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex flex-col justify-between">
             <span className="text-slate-400">Rủi ro trung bình (40–69)</span>
-            <div className="text-2xl font-black text-amber-400 mt-1">{riskStats.medium} <span className="text-xs font-normal text-slate-400">APIs</span></div>
+            <div className="text-2xl font-black text-amber-400 mt-1">{riskStats.medium} <span className="text-xs font-normal text-slate-400"> API</span></div>
             <span className="text-[10px] text-amber-300/80 mt-1">Kiểm thử thứ cấp</span>
           </div>
 
           <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex flex-col justify-between">
             <span className="text-slate-400">Rủi ro thấp (&lt; 40)</span>
-            <div className="text-2xl font-black text-emerald-400 mt-1">{riskStats.low} <span className="text-xs font-normal text-slate-400">APIs</span></div>
+            <div className="text-2xl font-black text-emerald-400 mt-1">{riskStats.low} <span className="text-xs font-normal text-slate-400"> API</span></div>
             <span className="text-[10px] text-emerald-300/80 mt-1">Phương thức đọc an toàn</span>
           </div>
 
@@ -223,23 +234,23 @@ export default function ProjectOverview() {
               <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Tìm API, path, tag..." className="w-48 pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-dark-900 border border-slate-200 dark:border-white/[0.1] rounded-xl text-xs" />
             </div>
 
-            <select aria-label="HTTP method" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)} className="rounded-xl px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-dark-900 border border-slate-200 dark:border-white/[0.1]">
-              <option value="ALL">All methods</option>
+            <select aria-label="Phương thức HTTP" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)} className="rounded-xl px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-dark-900 border border-slate-200 dark:border-white/[0.1]">
+              <option value="ALL">Mọi phương thức</option>
               {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => <option key={method}>{method}</option>)}
             </select>
           </div>
         </div>
 
-        {(endpointsError || cases.isError) && <InlineError message={apiErrorMessage(specs.error ?? cases.error, 'Could not load API data.')} retry={retryEndpoints} />}
+        {(endpointsError || cases.isError) && <InlineError message={apiErrorMessage(specs.error ?? cases.error, 'Không tải được dữ liệu API.')} retry={retryEndpoints} />}
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b bg-slate-50 dark:bg-dark-900/50 text-slate-500 uppercase text-[11px]">
                 <th className="py-3 px-3 w-12 text-center">Hạng</th>
-                <th className="py-3 px-5">Method & Path</th>
-                <th className="py-3 px-4">Tags</th>
-                <th className="py-3 px-4">Test cases</th>
+                <th className="py-3 px-5">Phương thức & đường dẫn</th>
+                <th className="py-3 px-4">Nhãn</th>
+                <th className="py-3 px-4">Kịch bản</th>
                 <th
                   className="py-3 px-4 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                   onClick={() => setRiskSort((curr) => curr === 'desc' ? 'asc' : 'desc')}
@@ -249,12 +260,12 @@ export default function ProjectOverview() {
                     {riskSort === 'desc' ? <ArrowDown className="w-3.5 h-3.5 text-primary-600" /> : riskSort === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-primary-600" /> : <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />}
                   </div>
                 </th>
-                <th className="py-3 px-5 text-right">Action</th>
+                <th className="py-3 px-5 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-              {endpointsLoading && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Loading endpoint catalog…</td></tr>}
-              {!endpointsLoading && !endpointsError && filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-500">{endpoints.length ? 'No endpoints match this filter.' : 'No OpenAPI endpoints yet. Import a specification to begin.'}</td></tr>}
+              {endpointsLoading && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Đang tải danh sách endpoint…</td></tr>}
+              {!endpointsLoading && !endpointsError && filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-500">{endpoints.length ? 'Không có endpoint nào khớp bộ lọc.' : 'Chưa có endpoint. Hãy nạp tài liệu OpenAPI để bắt đầu.'}</td></tr>}
               {filtered.map((endpoint, index) => {
                 const score = endpoint.riskScore ?? 0;
                 const level = score >= 70 ? 'HIGH' : score >= 40 ? 'MEDIUM' : 'LOW';
@@ -386,9 +397,9 @@ export default function ProjectOverview() {
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Phân rã tiêu chí cộng điểm (Heuristic Factors):</h4>
             <div className="space-y-2 mb-5">
               {(selectedRiskEndpoint.riskFactors && selectedRiskEndpoint.riskFactors.length > 0 ? selectedRiskEndpoint.riskFactors : [
-                { factor: 'HTTP Method Heuristic', points: selectedRiskEndpoint.method.toUpperCase() === 'DELETE' ? 40 : ['POST', 'PUT', 'PATCH'].includes(selectedRiskEndpoint.method.toUpperCase()) ? 20 : 0, description: `Phương thức ${selectedRiskEndpoint.method.toUpperCase()} tác động thay đổi dữ liệu.` },
-                { factor: 'Authentication Heuristic', points: (selectedRiskEndpoint.riskScore ?? 0) >= 50 ? 30 : 10, description: 'Đánh giá nguy cơ từ cơ chế xác thực và bề mặt tấn công.' },
-                { factor: 'Sensitive Data (PII) / Depth', points: (selectedRiskEndpoint.riskScore ?? 0) >= 70 ? 30 : 0, description: 'Phát hiện trường dữ liệu nhạy cảm hoặc schema phức tạp.' },
+                { factor: 'Theo phương thức HTTP', points: selectedRiskEndpoint.method.toUpperCase() === 'DELETE' ? 40 : ['POST', 'PUT', 'PATCH'].includes(selectedRiskEndpoint.method.toUpperCase()) ? 20 : 0, description: `Phương thức ${selectedRiskEndpoint.method.toUpperCase()} tác động thay đổi dữ liệu.` },
+                { factor: 'Ước lượng xác thực', points: (selectedRiskEndpoint.riskScore ?? 0) >= 50 ? 30 : 10, description: 'Đánh giá nguy cơ từ cơ chế xác thực và bề mặt tấn công.' },
+                { factor: 'Dữ liệu nhạy cảm (PII) / độ sâu', points: (selectedRiskEndpoint.riskScore ?? 0) >= 70 ? 30 : 0, description: 'Phát hiện trường dữ liệu nhạy cảm hoặc schema phức tạp.' },
               ]).map((factor, idx) => (
                 <div key={idx} className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] flex items-start justify-between gap-3 text-xs">
                   <div>
@@ -423,7 +434,7 @@ export default function ProjectOverview() {
           </div>
         </div>
       )}
-      <div className="glass-panel p-5 flex items-center justify-between"><div><h3 className="text-sm font-bold">Ready to review test cases?</h3><p className="text-xs text-slate-500 mt-0.5">Open the test builder for this project.</p></div><Link to={`/projects/${projectId}/tests`} className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center gap-2">Continue <ArrowRight className="w-4 h-4" /></Link></div>
+      <div className="glass-panel p-5 flex items-center justify-between"><div><h3 className="text-sm font-bold">Sẵn sàng xem lại kịch bản kiểm thử?</h3><p className="text-xs text-slate-500 mt-0.5">Mở trang kịch bản kiểm thử của dự án.</p></div><Link to={`/projects/${projectId}/tests`} className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center gap-2">Tiếp tục <ArrowRight className="w-4 h-4" /></Link></div>
     </div>
   );
 }
@@ -433,5 +444,5 @@ function Stat({ icon, label, value, detail }: { icon: React.ReactNode; label: st
 }
 
 function InlineError({ message, retry }: { message: string; retry: () => void }) {
-  return <div role="alert" className="m-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between"><span><AlertTriangle className="inline w-3.5 h-3.5 mr-1" />{message}</span><button onClick={retry} className="underline">Retry</button></div>;
+  return <div role="alert" className="m-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between"><span><AlertTriangle className="inline w-3.5 h-3.5 mr-1" />{message}</span><button onClick={retry} className="underline">Thử lại</button></div>;
 }

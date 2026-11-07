@@ -111,7 +111,7 @@ export const executeRun = async (
     // Auto-unstick previous stuck runs so project is never blocked
     await (prisma as any).testRun.updateMany({
       where: { projectId, status: 'RUNNING' },
-      data: { status: 'CANCELLED', endTime: new Date(), failureReason: 'Superseded by new test run' }
+      data: { status: 'CANCELLED', endTime: new Date(), failureReason: 'Bị thay thế bởi lượt chạy mới' }
     });
 
     // Target the latest active OpenAPI spec for this project
@@ -124,6 +124,7 @@ export const executeRun = async (
 
     let cases = await db.testCase.findMany({ where: {
       enabled: true,
+      status: { notIn: ['DISABLED', 'ARCHIVED'] },
       endpoint: { specId: latestSpec.id },
       ...(testCaseIds && testCaseIds.length > 0 ? { id: { in: testCaseIds } } : {}),
     } });
@@ -144,6 +145,7 @@ export const executeRun = async (
         }
         cases = await db.testCase.findMany({ where: {
           enabled: true,
+          status: { notIn: ['DISABLED', 'ARCHIVED'] },
           endpoint: { specId: latestSpec.id },
         } });
       }
@@ -156,7 +158,7 @@ export const executeRun = async (
     createdRunId = run.id;
     
     if (cases.length === 0) {
-      await db.testRun.update({ where: { id: run.id }, data: { status: 'FAILED', endTime: new Date(), failureReason: 'No enabled test cases were selected for execution.' } });
+      await db.testRun.update({ where: { id: run.id }, data: { status: 'FAILED', endTime: new Date(), failureReason: 'Không có kịch bản nào đang bật để chạy.' } });
       failureAlreadyPersisted = true;
       throw new AppError('No enabled test cases were selected for execution', 422, true, 'NO_ENABLED_TEST_CASES');
     }
@@ -411,7 +413,7 @@ export const cancelRun = async (req: AuthRequest, res: Response, next: NextFunct
     }
     const updated = await prisma.testRun.update({
       where: { id: req.params.testRunId },
-      data: { status: 'CANCELLED', endTime: new Date(), failureReason: 'Cancelled by user' }
+      data: { status: 'CANCELLED', endTime: new Date(), failureReason: 'Người dùng đã hủy' }
     });
     res.status(200).json({ success: true, data: updated });
   } catch (error) { next(error); }

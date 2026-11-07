@@ -1,6 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { AuthRequest } from '../middlewares/requireAuth';
-import { TestCaseService } from '../services/test-case.service';
+import { TestCaseService, TestCaseUpdateInput } from '../services/test-case.service';
+import { assertionService } from '../services/assertion.service';
 import { WorkspaceService, ALL_MEMBER_ROLES } from '../services/workspace.service';
 import { AppError } from '../utils/AppError';
 import prisma from '../utils/prisma';
@@ -105,7 +106,12 @@ export class TestCaseController {
     try {
       const userId = this.user(req);
       const row = await testCaseAccess(userId, req.params.testCaseId, true);
-      const updated = await testCaseService.update(req.params.testCaseId, req.body as { name?: string; payload?: unknown; expectedStatus?: number; enabled?: boolean; status?: string }, userId);
+      const body = req.body as TestCaseUpdateInput;
+      if (body.datasetId) {
+        const dataset = await prisma.testDataset.findUnique({ where: { id: body.datasetId }, select: { projectId: true } });
+        if (!dataset || dataset.projectId !== row.endpoint.spec.project.id) throw new AppError('Bộ dữ liệu không thuộc dự án này', 400, true, 'INVALID_DATASET');
+      }
+      const updated = await testCaseService.update(req.params.testCaseId, body, userId);
       await auditLogService.record(row.endpoint.spec.project.workspaceId, userId, 'TEST_CASE_UPDATED', 'TestCase', req.params.testCaseId, { name: row.name });
       res.status(200).json({ success: true, data: updated });
     } catch (error) { next(error); }
@@ -147,3 +153,21 @@ export class TestCaseController {
     } catch (error) { next(error); }
   };
 }
+
+
+/** Checks assertion syntax and (optionally) evaluates the expressions against a sample response. */
+export const previewAssertions = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { expressions, sample } = req.body as { expressions: string[]; sample?: { status?: number; headers?: Record<string, unknown>; body?: unknown; responseTime?: number } };
+    const context = { status: sample?.status ?? 200, headers: sample?.headers ?? {}, body: sample?.body ?? null, responseTime: sample?.responseTime ?? 0 };
+    const results = expressions.map((expression) => {
+      try {
+        assertionService.validateSyntax(expression);
+        return { expression, valid: true, ...(sample ? { passed: assertionService.evaluate(expression, context) } : {}) };
+      } catch (error) {
+        return { expression, valid: false, error: error instanceof Error ? error.message : 'Lỗi cú pháp' };
+      }
+    });
+    res.status(200).json({ success: true, data: results });
+  } catch (error) { next(error); }
+};
