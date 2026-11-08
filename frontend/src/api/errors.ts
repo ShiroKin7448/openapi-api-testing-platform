@@ -5,6 +5,13 @@ interface ApiErrorEnvelope { error?: { code?: string; message?: string }; messag
 const knownMessages: Record<string, string> = {
   INVALID_CREDENTIALS: 'Email hoặc mật khẩu chưa chính xác. Vui lòng kiểm tra và thử lại.',
   UNAUTHENTICATED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+  FORBIDDEN: 'Bạn không có quyền truy cập không gian làm việc hoặc tài nguyên này.',
+  NOT_FOUND: 'Không tìm thấy dữ liệu được yêu cầu.',
+  PROJECT_NOT_FOUND: 'Không tìm thấy dự án.',
+  TEST_RUN_NOT_FOUND: 'Không tìm thấy lượt chạy kiểm thử.',
+  SPEC_NOT_FOUND: 'Dự án chưa có đặc tả OpenAPI nào được tải lên.',
+  NO_ENABLED_TEST_CASES: 'Không có kịch bản kiểm thử nào đang bật để chạy.',
+  SCHEDULE_RUN_FAILED: 'Không thể khởi chạy lịch kiểm thử.',
   EMAIL_ALREADY_EXISTS: 'Email này đã được sử dụng. Hãy đăng nhập hoặc dùng email khác.',
   EMAIL_NOT_VERIFIED: 'Email của tài khoản chưa được xác minh. Hãy nhận mã OTP để hoàn tất đăng ký.',
   EMAIL_ALREADY_VERIFIED: 'Email này đã được xác minh. Bạn có thể đăng nhập.',
@@ -26,6 +33,8 @@ function friendlyAuthMessage(code: string | undefined, message: string | undefin
   if (normalized.includes('invalid request')) return knownMessages.VALIDATION_ERROR;
   if (normalized.includes('verification code') && (normalized.includes('invalid') || normalized.includes('expired'))) return knownMessages.INVALID_RESET_CODE;
   if (normalized.includes('email') && normalized.includes('send')) return knownMessages.EMAIL_DELIVERY_FAILED;
+  if (normalized.includes('not a member of this workspace')) return knownMessages.FORBIDDEN;
+  if (message && message !== 'Internal server error') return message;
   return fallback;
 }
 
