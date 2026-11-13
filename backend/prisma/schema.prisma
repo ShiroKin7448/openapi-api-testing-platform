@@ -100,6 +100,7 @@ model Project {
   apiTokens    ProjectApiToken[]
   datasets     TestDataset[]
   specVersions SpecVersion[]
+  notificationChannels NotificationChannel[]
 }
 
 model ProjectApiToken {
@@ -264,6 +265,7 @@ model TestRun {
   triggerType         TriggerType   @default(MANUAL)
   initiatedBy         String?
   durationMs          Int?
+  notifiedAt          DateTime?
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   environment Environment  @relation(fields: [environmentId], references: [id], onDelete: Cascade)
@@ -355,4 +357,25 @@ enum ScheduleInterval {
   DAILY
   WEEKLY
   CUSTOM
+}
+
+model NotificationChannel {
+  id         String    @id @default(uuid())
+  projectId  String
+  type       String    // DISCORD | SLACK | TELEGRAM
+  name       String
+  targetEnc  String    // AES-256-GCM encrypted webhook URL (or Telegram {botToken, chatId} JSON)
+  targetHint String    // masked, safe-to-display fragment of the target
+  events     String[]  // SCHEDULED_RUN | RUN_FAILED | REGRESSION | ALL_RUNS
+  enabled    Boolean   @default(true)
+  createdBy  String
+  lastStatus String?   // OK | ERROR
+  lastError  String?
+  lastSentAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }

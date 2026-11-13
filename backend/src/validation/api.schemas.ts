@@ -86,6 +86,13 @@ export const testCaseBulkStatusBody = z.object({
 export const createTestRunBody = z.object({ environmentId: idSchema.optional().or(z.literal('')), testCaseIds: z.array(idSchema).min(1).optional() }).strict();
 export const createApiTokenBody = z.object({ name: z.string().trim().min(1).max(100) }).strict();
 export const apiTokenParams = z.object({ projectId: idSchema, tokenId: idSchema });
+const notificationEvents = z.array(z.enum(['SCHEDULED_RUN', 'RUN_FAILED', 'REGRESSION', 'ALL_RUNS'])).min(1).max(4);
+export const channelParams = z.object({ projectId: idSchema, channelId: idSchema });
+export const createChannelBody = z.object({
+  type: z.enum(['DISCORD', 'SLACK', 'TELEGRAM']), name: z.string().trim().min(1).max(100), events: notificationEvents,
+  webhookUrl: z.string().trim().max(500).optional(), botToken: z.string().trim().max(200).optional(), chatId: z.string().trim().max(100).optional(),
+}).strict();
+export const updateChannelBody = z.object({ name: z.string().trim().min(1).max(100).optional(), events: notificationEvents.optional(), enabled: z.boolean().optional() }).strict();
 export const triggerCiRunBody = z.object({ environmentId: idSchema.optional().or(z.literal('')), testCaseIds: z.array(idSchema).min(1).optional() }).strict();
 export const testRunParams = z.object({ testRunId: idSchema });
 export const testRunResultsQuery = z.object({

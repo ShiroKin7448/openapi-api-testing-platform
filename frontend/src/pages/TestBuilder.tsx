@@ -11,11 +11,13 @@ import TestCaseTable from '../components/TestCaseTable';
 import AssertionEditor from '../components/AssertionEditor';
 import DatasetBinding from '../components/DatasetBinding';
 import DependencyFlowPanel from '../components/DependencyFlowPanel';
+import DependencyGraphView, { type GraphNodeInput } from '../components/DependencyGraphView';
 import { useCurrentRole } from '../hooks/useCurrentRole';
 import { EmptyState, ErrorBlock, LoadingBlock, MethodBadge, PageHeader } from '../components/ui';
 
 interface StudioEndpoint { id: string; method: string; path: string; tag: string; riskScore: number | null; }
 type EditorTab = 'payload' | 'rules' | 'dataset' | 'binding';
+type AllView = 'cases' | 'graph';
 
 const TYPE_META: Record<string, { label: string; icon: JSX.Element }> = {
   VALID: { label: 'Hợp lệ', icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> },
@@ -50,6 +52,23 @@ export default function TestBuilder() {
   const activeCases = selectedEndpointId === 'ALL' ? (allCases.data ?? []) : (cases.data ?? []);
   const activeCase = activeCases.find((item) => item.id === selectedCaseId) ?? activeCases[0];
   const selectedEndpoint = endpoints.find((endpoint) => endpoint.id === selectedEndpointId);
+  const [allView, setAllView] = useState<AllView>('cases');
+  const staticGraph = useMemo(() => {
+    const flow = flowQuery.data;
+    if (!flow) return { nodes: [] as GraphNodeInput[], edges: [] as Array<{ from: string; to: string }> };
+    const info = new Map(flow.endpointFlows.map((item) => [item.nodeId, item]));
+    const nodes: GraphNodeInput[] = flow.plan.levels.flatMap((level, levelIndex) => level.map((nodeId) => {
+      const item = info.get(nodeId);
+      return { id: nodeId, levelIndex, method: (item?.method ?? nodeId.split(' ')[0] ?? 'GET').toUpperCase(), path: item?.path ?? nodeId, status: 'pending' as const };
+    }));
+    const cyclic = new Set(flow.plan.cyclicComponents.flatMap((component) => component.nodes));
+    const cycleStart = flow.plan.levels.length;
+    for (const nodeId of cyclic) {
+      const item = info.get(nodeId);
+      nodes.push({ id: nodeId, levelIndex: cycleStart, method: (item?.method ?? 'GET').toUpperCase(), path: item?.path ?? nodeId, status: 'failed', detail: 'Nằm trong chu trình phụ thuộc' });
+    }
+    return { nodes, edges: flow.graph.edges.map((edge) => ({ from: edge.from, to: edge.to })) };
+  }, [flowQuery.data]);
   const endpointFlow = useMemo(() => flowQuery.data?.endpointFlows.find((f) => f.endpointId === selectedEndpointId), [flowQuery.data, selectedEndpointId]);
   const endpointsById = useMemo(() => new Map(endpoints.map((endpoint) => [endpoint.id, { method: endpoint.method, path: endpoint.path }])), [endpoints]);
   const caseCountByEndpoint = useMemo(() => {
@@ -156,7 +175,20 @@ export default function TestBuilder() {
           </aside>
 
           {selectedEndpointId === 'ALL' ? (
-            <div className="min-w-0 flex-1 overflow-y-auto"><TestCaseTable projectId={projectId} cases={allCases.data ?? []} isViewer={!canEdit} endpointsById={endpointsById} onOpen={(testCase) => { handleSelectEndpoint(testCase.endpointId); setSelectedCaseId(testCase.id); }} /></div>
+            <div className="min-w-0 flex-1 overflow-y-auto">
+              <div className="mb-3 flex gap-2">
+                {([['cases', 'Bảng kịch bản'], ['graph', 'Sơ đồ phụ thuộc']] as const).map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => setAllView(key)} className={allView === key ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}>{label}</button>
+                ))}
+              </div>
+              {allView === 'graph' ? (
+                <div className="glass-panel overflow-hidden">
+                  {flowQuery.isLoading ? <LoadingBlock /> : <DependencyGraphView nodes={staticGraph.nodes} edges={staticGraph.edges} height={520} />}
+                </div>
+              ) : (
+<TestCaseTable projectId={projectId} cases={allCases.data ?? []} isViewer={!canEdit} endpointsById={endpointsById} onOpen={(testCase) => { handleSelectEndpoint(testCase.endpointId); setSelectedCaseId(testCase.id); }} />
+              )}
+            </div>
           ) : (
             <section className="glass-panel flex min-h-[32rem] min-w-0 flex-1 flex-col overflow-hidden">
               <div className="flex flex-wrap items-center gap-2.5 border-b border-slate-200 px-5 py-3 dark:border-white/[0.08]">

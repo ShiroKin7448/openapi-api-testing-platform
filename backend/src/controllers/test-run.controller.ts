@@ -193,7 +193,12 @@ export const executeRun = async (
       levels = [[...executableEndpointIds]];
     }
 
-    const executablePlan = { levels, cyclicComponents: [] };
+    // Persist the dependency edges (as endpoint ids) next to the Kahn levels so the UI can draw the DAG of this exact run.
+    const planEdges = Array.from(new Map(edges
+      .map((edge) => ({ from: endpointByNode.get(edge.from), to: endpointByNode.get(edge.to), source: edge.source }))
+      .filter((edge): edge is { from: string; to: string; source: string } => typeof edge.from === 'string' && typeof edge.to === 'string')
+      .map((edge) => [`${edge.from}->${edge.to}`, edge])).values());
+    const executablePlan = { levels, cyclicComponents: [], edges: planEdges };
     if (levels.length === 0) throw new AppError('Execution plan contains no eligible test case endpoints', 422, true, 'EMPTY_EXECUTION_PLAN');
 
     await db.testRun.update({ where: { id: run.id }, data: { status: 'RUNNING', startTime: new Date(), currentLevel: 0, executionPlan: executablePlan } });
@@ -290,6 +295,42 @@ export const getRun = async (req: AuthRequest, res: Response, next: NextFunction
     const passed = results.filter((result) => result.status === 'PASSED').length;
     const failed = results.filter((result) => result.status === 'FAILED' || result.status === 'ERROR').length;
     res.status(200).json({ success: true, data: runSummary(run, completed, passed, failed) });
+  } catch (error) { next(error); }
+};
+
+export const getRunGraph = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!req.user) throw new AppError('Unauthorized', 401, true, 'UNAUTHORIZED');
+    const run = await accessibleRun(req.user.id, req.params.testRunId);
+    const plan = (run.executionPlan && typeof run.executionPlan === 'object' ? run.executionPlan : {}) as { levels?: unknown; edges?: unknown };
+    const levels: string[][] = Array.isArray(plan.levels) ? plan.levels.filter((l): l is string[] => Array.isArray(l)) : [];
+    const edges = Array.isArray(plan.edges) ? plan.edges as Array<{ from: string; to: string; source?: string }> : [];
+    const endpointIds = levels.flat();
+    const endpoints = endpointIds.length
+      ? await (prisma as any).endpoint.findMany({ where: { id: { in: endpointIds } }, select: { id: true, method: true, path: true, operationId: true } }) as Array<{ id: string; method: string; path: string; operationId: string | null }>
+      : [];
+    const byId = new Map(endpoints.map((endpoint) => [endpoint.id, endpoint]));
+    const results = await db.testResult.findMany({ where: { testRunId: run.id }, select: { status: true, testCase: { select: { endpointId: true } } } }) as unknown as Array<{ status: string; testCase: { endpointId: string } }>;
+    const stats = new Map<string, { total: number; passed: number; failed: number }>();
+    for (const result of results) {
+      const entry = stats.get(result.testCase.endpointId) ?? { total: 0, passed: 0, failed: 0 };
+      entry.total += 1;
+      if (result.status === 'PASSED') entry.passed += 1;
+      else if (result.status === 'FAILED' || result.status === 'ERROR') entry.failed += 1;
+      stats.set(result.testCase.endpointId, entry);
+    }
+    const runCaseIds = (run as unknown as { testCaseIds?: unknown }).testCaseIds;
+    const caseCounts = endpointIds.length
+      ? await (prisma as any).testCase.groupBy({ by: ['endpointId'], where: { id: { in: Array.isArray(runCaseIds) ? runCaseIds : [] }, endpointId: { in: endpointIds } }, _count: { _all: true } }) as Array<{ endpointId: string; _count: { _all: number } }>
+      : [];
+    const planned = new Map(caseCounts.map((row) => [row.endpointId, row._count._all]));
+    const nodes = levels.flatMap((level, levelIndex) => level.map((endpointId) => {
+      const endpoint = byId.get(endpointId);
+      const stat = stats.get(endpointId) ?? { total: 0, passed: 0, failed: 0 };
+      return { id: endpointId, levelIndex, method: (endpoint?.method ?? 'GET').toUpperCase(), path: endpoint?.path ?? endpointId,
+        label: endpoint?.operationId ?? null, totalCases: planned.get(endpointId) ?? stat.total, completed: stat.total, passed: stat.passed, failed: stat.failed };
+    }));
+    res.status(200).json({ success: true, data: { runId: run.id, status: run.status, currentLevel: run.currentLevel, levels: levels.length, nodes, edges: edges.map((e) => ({ from: e.from, to: e.to, source: e.source ?? '' })), hasEdges: Array.isArray(plan.edges) } });
   } catch (error) { next(error); }
 };
 

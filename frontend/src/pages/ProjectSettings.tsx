@@ -9,12 +9,13 @@ import { maintenanceApi } from '../api/maintenance.api';
 import { saveBlob } from '../api/reports.api';
 import { queryKeys } from '../api/queryClient';
 import { apiErrorMessage } from '../api/errors';
+import NotificationChannels from '../components/NotificationChannels';
 import { useCurrentRole } from '../hooks/useCurrentRole';
 import { Callout, Card, ConfirmDialog, CopyButton, EmptyState, ErrorBlock, LoadingBlock, PageHeader, Tabs, formatDateTime } from '../components/ui';
 import workflowTemplate from '../../../examples/ci/api-test.yml?raw';
 import shellTemplate from '../../../examples/ci/run-api-tests.sh?raw';
 
-type SettingsTab = 'general' | 'ci' | 'data';
+type SettingsTab = 'general' | 'notify' | 'ci' | 'data';
 
 function parseVariables(value: string): Record<string, string> {
   const variables: Record<string, string> = {};
@@ -295,15 +296,16 @@ export default function ProjectSettings() {
   const [params, setParams] = useSearchParams();
   const { role } = useCurrentRole();
   const canManage = role === 'OWNER' || role === 'ADMIN';
-  const tab = (['general', 'ci', 'data'].includes(params.get('tab') ?? '') ? params.get('tab') : 'general') as SettingsTab;
+  const tab = (['general', 'notify', 'ci', 'data'].includes(params.get('tab') ?? '') ? params.get('tab') : 'general') as SettingsTab;
   const setTab = (next: SettingsTab) => { const value = new URLSearchParams(params); value.set('tab', next); setParams(value, { replace: true }); };
 
   return (
     <div className="animate-in max-w-5xl space-y-5">
       <PageHeader icon={<Settings2 className="h-5 w-5" />} title="Cài đặt dự án" description="Thông tin dự án, môi trường chạy, tích hợp CI/CD và quản lý dung lượng dữ liệu."
         actions={<Link to={`/projects/${projectId}/schedules`} className="btn-secondary btn-sm sm:px-4 sm:py-2"><CalendarClock className="h-4 w-4" />Lịch chạy tự động</Link>} />
-      <Tabs<SettingsTab> value={tab} onChange={setTab} tabs={[{ id: 'general', label: 'Thông tin & môi trường' }, { id: 'ci', label: 'Tích hợp CI/CD' }, { id: 'data', label: 'Dữ liệu & dọn dẹp' }]} />
+      <Tabs<SettingsTab> value={tab} onChange={setTab} tabs={[{ id: 'general', label: 'Thông tin & môi trường' }, { id: 'notify', label: 'Thông báo' }, { id: 'ci', label: 'Tích hợp CI/CD' }, { id: 'data', label: 'Dữ liệu & dọn dẹp' }]} />
       {tab === 'general' && <GeneralTab projectId={projectId} canManage={canManage} />}
+      {tab === 'notify' && <NotificationChannels projectId={projectId} canManage={canManage} />}
       {tab === 'ci' && <CiTab projectId={projectId} canManage={canManage} />}
       {tab === 'data' && <DataTab projectId={projectId} canManage={canManage} />}
     </div>

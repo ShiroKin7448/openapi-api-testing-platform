@@ -1,3 +1,4 @@
+import { notificationService } from './notification.service';
 import { EventEmitter } from 'events';
 import { Job, Queue, QueueEvents } from 'bullmq';
 import Redis from 'ioredis';
@@ -123,6 +124,7 @@ export class QueueEventsService {
     await db.testRun.update({ where: { id: runId }, data: { updatedAt: row.createdAt } });
     const event = dto(row);
     this.emitter.emit(`run:${runId}`, event);
+    if (name === 'run.completed' || name === 'run.failed') void notificationService.notifyRunFinished(runId);
     return event;
   }
 
