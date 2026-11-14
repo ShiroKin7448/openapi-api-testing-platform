@@ -134,3 +134,14 @@ export const testrunsApi = {
     return () => { controller.abort(); onConnectionChange(false); };
   },
 };
+
+export interface RunGraphNodeDto {
+  id: string; levelIndex: number; method: string; path: string; label: string | null;
+  totalCases: number; completed: number; passed: number; failed: number;
+}
+export interface RunGraphDto {
+  runId: string; status: string; currentLevel: number; levels: number;
+  nodes: RunGraphNodeDto[]; edges: Array<{ from: string; to: string; source: string }>; hasEdges: boolean;
+}
+export const fetchRunGraph = async (runId: string): Promise<RunGraphDto> =>
+  (await apiClient.get<ApiEnvelope<RunGraphDto>>(`/test-runs/${runId}/graph`)).data.data;

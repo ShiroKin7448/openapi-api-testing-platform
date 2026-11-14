@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createRun, getRuns, getRun, getRunProgress, getRunResults, getRunEvents, cancelRun, getQueueStatus } from '../controllers/test-run.controller';
+import { createRun, getRuns, getRun, getRunProgress, getRunGraph, getRunResults, getRunEvents, cancelRun, getQueueStatus } from '../controllers/test-run.controller';
 import { requireAuth } from '../middlewares/requireAuth';
 import { validateRequest } from '../middlewares/validateRequest';
 import { exportRun, compareRuns } from '../controllers/report.controller';
@@ -12,6 +12,7 @@ router.get('/projects/:projectId/test-runs', requireAuth, validateRequest({ para
 router.get('/projects/:projectId/queue-status', requireAuth, validateRequest({ params: projectParams, query: noQueryParams }), getQueueStatus);
 router.get('/test-runs/:testRunId', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams }), getRun);
 router.get('/test-runs/:testRunId/results', requireAuth, validateRequest({ params: testRunParams, query: testRunResultsQuery }), getRunResults);
+router.get('/test-runs/:testRunId/graph', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams }), getRunGraph);
 router.get('/test-runs/:testRunId/progress', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams }), getRunProgress);
 router.get('/test-runs/:testRunId/events', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams }), getRunEvents);
 router.post('/test-runs/:testRunId/cancel', requireAuth, validateRequest({ params: testRunParams, query: noQueryParams, body: noQueryParams }), cancelRun);

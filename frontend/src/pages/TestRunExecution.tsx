@@ -25,7 +25,8 @@ import {
   Send,
   DownloadCloud,
 } from 'lucide-react';
-import { testrunsApi, type TestRunResultDto } from '../api/testruns.api';
+import { testrunsApi, fetchRunGraph, type TestRunResultDto } from '../api/testruns.api';
+import DependencyGraphView, { type GraphNodeInput, type GraphNodeStatus } from '../components/DependencyGraphView';
 import { queryKeys } from '../api/queryClient';
 import { apiErrorMessage } from '../api/errors';
 import { environmentsApi } from '../api/environments.api';
@@ -182,6 +183,7 @@ export default function TestRunExecution() {
   const [pageSize, setPageSize] = useState<number>(10);
   const [selectedResult, setSelectedResult] = useState<TestRunResultDto | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [view, setView] = useState<'results' | 'graph'>('results');
 
   useEffect(() => {
     if (!runId) return undefined;
@@ -190,6 +192,7 @@ export default function TestRunExecution() {
       (event) => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.run(runId) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.runProgress(runId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.runGraph(runId) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.runResults(runId) });
         if (event.name === 'run.completed' || event.name === 'run.failed') {
           void queryClient.invalidateQueries({ queryKey: ['test-runs', runId, 'analytics'] });
@@ -226,6 +229,13 @@ export default function TestRunExecution() {
     enabled: Boolean(runId),
     refetchInterval: () =>
       isTerminal(progress.data?.status ?? run.data?.status) || sseConnected ? false : 2000,
+  });
+
+  const graph = useQuery({
+    queryKey: queryKeys.runGraph(runId),
+    queryFn: () => fetchRunGraph(runId),
+    enabled: Boolean(runId) && view === 'graph',
+    refetchInterval: () => (isTerminal(progress.data?.status ?? run.data?.status) || sseConnected ? false : 2000),
   });
 
   const rows = useMemo(() => results.data?.results ?? [], [results.data?.results]);
@@ -291,6 +301,22 @@ export default function TestRunExecution() {
   useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, levelFilter, searchQuery, pageSize]);
+
+  const graphNodes = useMemo<GraphNodeInput[]>(() => {
+    const data = graph.data;
+    if (!data) return [];
+    const terminalNotDone = data.status === 'FAILED' || data.status === 'CANCELLED';
+    return data.nodes.map((node) => {
+      const done = node.totalCases > 0 && node.completed >= node.totalCases;
+      let status: GraphNodeStatus = 'pending';
+      if (node.failed > 0) status = 'failed';
+      else if (done) status = 'passed';
+      else if (terminalNotDone && node.completed === 0) status = 'halted';
+      else if (data.status === 'RUNNING' && node.levelIndex === data.currentLevel) status = 'running';
+      return { id: node.id, levelIndex: node.levelIndex, method: node.method, path: node.path, status,
+        detail: node.totalCases ? `${node.completed}/${node.totalCases} ca · ${node.passed} pass · ${node.failed} fail` : undefined };
+    });
+  }, [graph.data]);
 
   const elapsed = run.data?.startedAt
     ? Math.max(0, Math.round((Date.now() - new Date(run.data.startedAt).getTime()) / 1000))
@@ -571,6 +597,31 @@ export default function TestRunExecution() {
             </div>
           )}
 
+          {/* View switch: results table / dependency graph */}
+          <div className="flex items-center gap-2">
+            {([['results', 'Kết quả chi tiết'], ['graph', 'Sơ đồ phụ thuộc (DAG)']] as const).map(([key, label]) => (
+              <button
+                key={key} type="button" onClick={() => setView(key)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${view === key
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white dark:bg-dark-900/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/[0.08] hover:border-primary-400'}`}
+              >{label}</button>
+            ))}
+          </div>
+
+          {view === 'graph' && (
+            <div className="glass-panel overflow-hidden shadow-sm">
+              {graph.isLoading && <div className="p-8 text-center text-xs text-slate-500">Đang tải sơ đồ…</div>}
+              {graph.data && !graph.data.hasEdges && (
+                <div className="px-4 py-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-200 dark:border-amber-800">
+                  Lượt chạy này được tạo trước khi hệ thống lưu quan hệ phụ thuộc nên chỉ hiển thị các tầng, không có mũi tên.
+                </div>
+              )}
+              {graph.data && <DependencyGraphView nodes={graphNodes} edges={graph.data.edges.map((edge) => ({ from: edge.from, to: edge.to }))} />}
+            </div>
+          )}
+
+          {view === 'results' && (<>
           {/* Table & Filtering Toolbar */}
           <div className="glass-panel overflow-hidden shadow-sm">
             {/* Filter toolbar */}
@@ -856,6 +907,8 @@ export default function TestRunExecution() {
               </div>
             )}
           </div>
+
+          </>)}
 
           {/* Worker Results Footer */}
           <div className="glass-panel flex flex-col overflow-hidden shadow-sm">

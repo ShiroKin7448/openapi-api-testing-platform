@@ -24,7 +24,11 @@ export class RegressionService {
     const historicalRuns = await prisma.testRun.findMany({
       where: {
         id: { not: testRunId },
-        status: 'COMPLETED'
+        status: 'COMPLETED',
+        // Baseline must come from the same project AND environment as the current run; otherwise
+        // other projects' timings pollute the comparison and trigger false regression alerts.
+        project: { testRuns: { some: { id: testRunId } } },
+        environment: { testRuns: { some: { id: testRunId } } }
       },
       orderBy: { createdAt: 'desc' },
       take: 50,

@@ -13,7 +13,8 @@
     "test": "jest",
     "test:e2e": "jest --runInBand src/tests/system.e2e.test.ts",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "benchmark": "ts-node -r tsconfig-paths/register --transpile-only src/benchmark/run-benchmark.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",

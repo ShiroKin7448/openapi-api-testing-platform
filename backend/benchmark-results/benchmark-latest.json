@@ -1,0 +1,148 @@
+{
+  "generatedAt": "2026-11-13T11:11:09.095Z",
+  "node": "v24.15.0",
+  "spec": {
+    "file": "petstore-3.0.yaml",
+    "endpoints": 13,
+    "dependencyEdges": 18,
+    "kahnLevels": 4
+  },
+  "generation": {
+    "runs": 10,
+    "minMs": 29.7712,
+    "medianMs": 41.6338,
+    "p95Ms": 54.8468,
+    "maxMs": 54.8468,
+    "roundedMedianMs": 41.63,
+    "note": "parse + dereference + normalize + DAG + Kahn + generate all cases; database writes stubbed in memory (real inserts add I/O latency)."
+  },
+  "cases": {
+    "total": 96,
+    "byType": {
+      "VALID": 13,
+      "NEGATIVE": 66,
+      "BOUNDARY": 17
+    },
+    "perEndpoint": {
+      "POST /pet": 22,
+      "PUT /pet": 22,
+      "GET /pet/findByStatus": 1,
+      "GET /pet/{petId}": 1,
+      "DELETE /pet/{petId}": 1,
+      "GET /store/inventory": 1,
+      "POST /store/order": 18,
+      "GET /store/order/{orderId}": 1,
+      "DELETE /store/order/{orderId}": 1,
+      "POST /user": 13,
+      "GET /user/{username}": 1,
+      "PUT /user/{username}": 13,
+      "DELETE /user/{username}": 1
+    }
+  },
+  "contractFaults": {
+    "injected": 11,
+    "applicable": 11,
+    "tool": {
+      "detected": 11,
+      "rate": 100
+    },
+    "postmanStatusOnlyModel": {
+      "detected": 1,
+      "rate": 9.09
+    },
+    "controlRun": {
+      "casesChecked": 13,
+      "falsePositives": 0
+    },
+    "details": [
+      {
+        "id": "F1",
+        "description": "Sai kiểu: id (integer) trả về chuỗi",
+        "target": "GET /pet/{petId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F2",
+        "description": "Thiếu trường bắt buộc: name",
+        "target": "GET /pet/{petId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F3",
+        "description": "Giá trị null ở trường không cho phép null: name",
+        "target": "GET /pet/{petId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F4",
+        "description": "Giá trị ngoài enum: status = \"sleeping\"",
+        "target": "GET /pet/{petId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F5",
+        "description": "Sai kiểu ở đối tượng lồng nhau: category.id là chuỗi",
+        "target": "GET /pet/{petId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F6",
+        "description": "Sai kiểu phần tử mảng: photoUrls chứa số",
+        "target": "GET /pet/{petId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F7",
+        "description": "Sai định dạng: shipDate không phải date-time",
+        "target": "GET /store/order/{orderId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F8",
+        "description": "Số thực ở trường integer: quantity = 1.5",
+        "target": "GET /store/order/{orderId}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F9",
+        "description": "Sai kiểu gốc: danh sách trả về đối tượng",
+        "target": "GET /pet/findByStatus",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      },
+      {
+        "id": "F10",
+        "description": "Sai mã trạng thái: trả 204 thay vì 200",
+        "target": "GET /user/{username}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": true
+      },
+      {
+        "id": "F11",
+        "description": "Vi phạm định dạng email",
+        "target": "GET /user/{username}",
+        "applicable": true,
+        "tool": true,
+        "postmanStatusOnly": false
+      }
+    ]
+  }
+}
