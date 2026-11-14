@@ -241,7 +241,7 @@ describe('OpenAPI import and endpoint catalog API', () => {
     expect(normalizationFailure.status).toBe(400);
     expect((await normalizationFailure.json() as { error: { code: string; message: string } }).error).toMatchObject({ code: 'NORMALIZATION_FAILED', message: 'The OpenAPI document could not be normalized' });
 
-    mockMethod('openAPISpec', 'findMany').mockRejectedValueOnce(new Error('database details must stay private'));
+    mockMethod('openAPISpec', 'findFirst').mockRejectedValueOnce(new Error('database details must stay private'));
     const persistenceFailure = await upload(fixture);
     expect(persistenceFailure.status).toBe(500);
     const error = await persistenceFailure.json() as { error: { code: string; message: string } };

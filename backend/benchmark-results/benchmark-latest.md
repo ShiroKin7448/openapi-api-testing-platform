@@ -1,13 +1,13 @@
 # Kết quả benchmark (Petstore 3.0 rút gọn)
 
-- Thời điểm chạy: 2026-11-13T11:11:09.095Z · Node v24.15.0
+- Thời điểm chạy: 2026-11-14T09:29:47.561Z · Node v24.21.0
 - Đặc tả: 13 endpoint, 18 cạnh phụ thuộc, 4 tầng Kahn
 
 ## 1. Thời gian tạo ca kiểm thử (đo thực, 10 lần)
 
 | Min | Median | P95 | Max |
 |---|---|---|---|
-| 29.77 ms | 41.63 ms | 54.85 ms | 54.85 ms |
+| 21.67 ms | 22.35 ms | 31.74 ms | 31.74 ms |
 
 parse + dereference + normalize + DAG + Kahn + generate all cases; database writes stubbed in memory (real inserts add I/O latency).
 

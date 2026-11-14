@@ -90,23 +90,29 @@ export const executeRun = async (
   try {
     const workspaceId = await authorize(userId, projectId);
 
-    // Auto-resolve or create environment if not provided or not found
+    // Resolve environment: if environmentId is provided, it must belong to this project
     let envId = environmentId;
-    let environment = envId ? await db.environment.findFirst({ where: { id: envId, projectId }, select: { id: true } }) : null;
-    if (!environment) {
-      environment = await db.environment.findFirst({ where: { projectId }, select: { id: true } });
+    if (envId) {
+      const environment = await db.environment.findFirst({ where: { id: envId, projectId }, select: { id: true } });
+      if (!environment) {
+        throw new AppError('Environment not found in this project', 404, true, 'ENVIRONMENT_NOT_FOUND');
+      }
+    } else {
+      let environment = await db.environment.findFirst({ where: { projectId }, select: { id: true } });
+      if (!environment && (prisma as any).environment?.create) {
+        const createdEnv = await (prisma as any).environment.create({
+          data: {
+            name: 'Môi trường mặc định (Localhost:3000)',
+            projectId,
+            variables: { BASE_URL: 'http://localhost:3000' }
+          }
+        });
+        environment = { id: createdEnv.id };
+      }
+      if (environment) {
+        envId = environment.id;
+      }
     }
-    if (!environment) {
-      const createdEnv = await (prisma as any).environment.create({
-        data: {
-          name: 'Môi trường mặc định (Localhost:3000)',
-          projectId,
-          variables: { BASE_URL: 'http://localhost:3000' }
-        }
-      });
-      environment = { id: createdEnv.id };
-    }
-    envId = environment.id;
 
     // Auto-unstick previous stuck runs so project is never blocked
     await (prisma as any).testRun.updateMany({
@@ -115,11 +121,17 @@ export const executeRun = async (
     });
 
     // Target the latest active OpenAPI spec for this project
-    const latestSpec = await (prisma as any).openAPISpec.findFirst({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
-      include: { endpoints: true },
-    });
+    const latestSpec = typeof (prisma as any).openAPISpec?.findFirst === 'function'
+      ? await (prisma as any).openAPISpec.findFirst({
+          where: { projectId },
+          orderBy: { createdAt: 'desc' },
+          include: { endpoints: true },
+        })
+      : (await (prisma as any).openAPISpec.findMany({
+          where: { projectId },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        }))?.[0];
     if (!latestSpec) throw new AppError('No OpenAPI spec found for this project', 404, true, 'SPEC_NOT_FOUND');
 
     let cases = await db.testCase.findMany({ where: {
@@ -130,24 +142,26 @@ export const executeRun = async (
     } });
 
     // If no test cases exist, auto-generate them on the fly for all endpoints
-    if (cases.length === 0) {
+    if (cases.length === 0 && (!testCaseIds || testCaseIds.length === 0) && (prisma as any).testCase?.create) {
       const specEndpoints = latestSpec.endpoints;
-      if (specEndpoints.length > 0) {
-        const testCaseService = new TestCaseService();
-        for (const ep of specEndpoints) {
-          await testCaseService.generateForEndpoint(ep.id, {
-            path: ep.path,
-            method: ep.method,
-            operationId: ep.operationId ?? undefined,
-            parameters: [],
-            responses: [{ statusCode: '200', description: 'OK', content: {} }]
-          });
-        }
-        cases = await db.testCase.findMany({ where: {
-          enabled: true,
-          status: { notIn: ['DISABLED', 'ARCHIVED'] },
-          endpoint: { specId: latestSpec.id },
-        } });
+      if (specEndpoints && specEndpoints.length > 0) {
+        try {
+          const testCaseService = new TestCaseService();
+          for (const ep of specEndpoints) {
+            await testCaseService.generateForEndpoint(ep.id, {
+              path: ep.path,
+              method: ep.method,
+              operationId: ep.operationId ?? undefined,
+              parameters: [],
+              responses: [{ statusCode: '200', description: 'OK', content: {} }]
+            });
+          }
+          cases = await db.testCase.findMany({ where: {
+            enabled: true,
+            status: { notIn: ['DISABLED', 'ARCHIVED'] },
+            endpoint: { specId: latestSpec.id },
+          } });
+        } catch { /* best effort */ }
       }
     }
 

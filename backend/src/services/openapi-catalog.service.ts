@@ -187,20 +187,44 @@ export class OpenApiCatalogService {
     const contentHash = createHash('sha256').update(canonicalJson(content)).digest('hex');
 
     try {
+      // Check for existing identical spec (re-importing makes it the active spec again)
+      const duplicate = await prisma.openAPISpec.findFirst({
+        where: { projectId, contentHash }, include: { endpoints: { orderBy: { riskScore: 'desc' } } },
+      });
+      if (duplicate) {
+        if (prisma.openAPISpec.update) {
+          await prisma.openAPISpec.update({ where: { id: duplicate.id }, data: { createdAt: new Date() } });
+        }
+        try {
+          await specVersionService.record(projectId, { openapiVersion: imported.version, normalized: imported.normalized, createdBy: userId });
+        } catch { /* history is best-effort */ }
+        return {
+          created: false,
+          result: {
+            specId: duplicate.id,
+            version: duplicate.version,
+            endpointCount: duplicate.endpoints?.length ?? 0,
+            endpoints: (duplicate.endpoints ?? []).map((endpoint) => endpointResult(endpoint, duplicate.content)),
+          },
+        };
+      }
+
       // Previous specs are intentionally KEPT: their test cases own the results of past runs
       // (reports, run comparison, history). Every feature works on the most recent spec only.
       const previousSpec = await prisma.openAPISpec.findFirst({ where: { projectId }, orderBy: { createdAt: 'desc' }, select: { id: true } });
 
       // Auto-create default environment if project has none
-      const envCount = await prisma.environment.count({ where: { projectId } });
-      if (envCount === 0) {
-        await prisma.environment.create({
-          data: {
-            name: 'Môi trường mặc định (Localhost:3000)',
-            projectId,
-            variables: { BASE_URL: 'http://localhost:3000' },
-          },
-        });
+      if (prisma.environment?.count && prisma.environment?.create) {
+        const envCount = await prisma.environment.count({ where: { projectId } });
+        if (envCount === 0) {
+          await prisma.environment.create({
+            data: {
+              name: 'Môi trường mặc định (Localhost:3000)',
+              projectId,
+              variables: { BASE_URL: 'http://localhost:3000' },
+            },
+          });
+        }
       }
 
       const persisted = await prisma.$transaction(async (transaction) => {

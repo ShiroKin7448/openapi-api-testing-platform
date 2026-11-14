@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-13T11:11:09.095Z",
-  "node": "v24.15.0",
+  "generatedAt": "2026-11-14T09:29:47.561Z",
+  "node": "v24.21.0",
   "spec": {
     "file": "petstore-3.0.yaml",
     "endpoints": 13,
@@ -9,11 +9,11 @@
   },
   "generation": {
     "runs": 10,
-    "minMs": 29.7712,
-    "medianMs": 41.6338,
-    "p95Ms": 54.8468,
-    "maxMs": 54.8468,
-    "roundedMedianMs": 41.63,
+    "minMs": 21.6719,
+    "medianMs": 22.3473,
+    "p95Ms": 31.7445,
+    "maxMs": 31.7445,
+    "roundedMedianMs": 22.35,
     "note": "parse + dereference + normalize + DAG + Kahn + generate all cases; database writes stubbed in memory (real inserts add I/O latency)."
   },
   "cases": {

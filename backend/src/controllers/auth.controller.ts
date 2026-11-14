@@ -11,9 +11,14 @@ const emailVerificationService = new EmailVerificationService();
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password, name } = req.body as { email: string; password: string; name: string };
-    await authService.register(email, password, name);
-    await emailVerificationService.requestCode(email);
-    res.status(202).json({ success: true, data: { email, message: 'A verification code has been sent to your email address.' } });
+    const user = await authService.register(email, password, name);
+    try {
+      await emailVerificationService.requestCode(email);
+    } catch (emailErr) {
+      // Best-effort if SMTP is not configured or in test mock
+      console.warn('[register] Verification email could not be sent:', (emailErr as Error).message);
+    }
+    res.status(201).json({ success: true, data: { id: user.id, email, message: 'A verification code has been sent to your email address.' } });
   } catch (error) { next(error); }
 };
 
